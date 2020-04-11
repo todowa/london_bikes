@@ -1,0 +1,257 @@
+---
+title: "Forecasting Shared Bike Usage in London"
+output:
+  html_notebook:
+    theme: readable
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: true
+    toc_depth: 1
+    number_sections: true
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Import required libraries
+#if(!exists("dat")) {source("bike_analysis.R")}
+```
+
+
+## Introduction
+
+In this paper, I use machine learning techniques to predict the demand for shared bikes in London. In particular, I focus on how the nature of the outcome variable, as a count variable, affects the choice of modelling and evaluation approach.
+
+Kaggle, the online data science community, offers a competition to [forecast shared bike demand]( https://www.kaggle.com/c/bike-sharing-demand) on a scheme in Washington DC, the [Capital Bikeshare]( https://www.capitalbikeshare.com/about). Rather than taking that widely used dataset, I use data on a similar bike scheme in London, also available from the Kaggle platform. On the one hand, I examine shared bike demand because there are already a large number of analyses out there to learn from and adapt. On the other hand, I choose to examine London as opposed to Washington DC, since there are fewer analyses of London’s data already out there.
+
+The demand for shared bikes is measured as a frequency or count variable, which tallies the number of new trips started each hour. As a result, it cannot take on negative values, and unlike the Gaussian distribution is skewed with a long tail towards higher count values.
+Kaggle implicitly acknowledges the skewed shape of the distribution, since for any competition entry, before calculating the standard Root Mean Squared Error or RMSE measure of prediction performance, it first transforms the count outcome variable. Kaggle transforms both the actual count and its predicted counterpart by taking their logarithms, leading to what is known as the Root Mean Squared *Logarithmic* Error or RMSLE. I define the RMSLE in the [Methodology] section of this report.
+
+Log-transforming the outcome variable is a common practice in data science, typically to make non-Gaussian random variables appear more Gaussian, making them amenable to models with attractive properties for Gaussian variables. In particular, this may be true in the case of count data. Yet, there are downsides to this approach too, such as the potential for biased predictions. Moreover, as this paper describes, there are other ways of modelling count data which do not rely on making this transformation.
+
+In this paper, I compare a number of different models for predicting bike demand. First, I train standard machine learning models to predict the log-transformed count outcome. Second, I train two generalized linear models (GLM) which parametrize the distribution of the count variable as quasi-Poisson or negative binomial, thereby parametrizing the distribution of the error term.
+
+I compare the results of the various models using the RMSLE as the measure of goodness-of-fit, where the error is calculated by taking the difference between the log-transformation of the actual count variable and its predicted counterpart.
+
+The remainder of this paper proceeds as follows:
+
+1.	First, the [Exploring the Dataset] section describes and explores the London bike sharing dataset. This exploration suggests several meaningful avenues for modelling features and the predictions.
+
+2.	Next, the [Methodology] section builds on the previous data exploration step by describing the modelling approach. In particular, it begins by outlining the objective of this paper and defines the RMSE and RMSLE loss functions. It then describes the steps I take to clean and prepare the data for modelling, before describing the particular machine learning models I apply.
+
+3.	Next, the [Results] section describes the results of the modelling approaches.
+
+4.	Finally, the [Concluding Remarks] section offers an overall assessment of the work in this paper and areas for future work.
+
+
+## Exploring the Dataset
+
+The analysis in this paper uses a time series dataset downloaded from [Kaggle](https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset), which counts the number of new trips on London’s cycle hire scheme each hour for the period from `r format(summary_stats_full$start_date, "%d %B %Y")` to `r format(summary_stats_full$last_date, "%d %B %Y")`.
+
+The bike scheme in London is officially called [Santander Cycles]( https://tfl.gov.uk/modes/cycling/santander-cycles) (previously Barclays Cycle Hire), though the bikes are colloquially known as “Boris bikes”, named after Boris Johnson, London’s mayor when the scheme was implemented. The scheme allows any member of the public to easily hire and ride a bike for an individual trip by collecting a bike from a [docking station](https://tfl.gov.uk/modes/cycling/santander-cycles/find-a-docking-station?intcmp=2321) and returning it to another station located around central London. As of today, there is a network of 750 docking stations around the UK’s capital with over 11,500 bikes.
+
+Besides counting bike trips, the dataset also includes a number of other variables which are likely useful for predicting the number of trips, including bank holiday and weather data.
+
+Although I download the full dataset from Kaggle, the dataset’s [webpage]( https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset) makes clear the original sources of the data. The bike data is originally gathered from [Transport for London (TfL)](https://cycling.data.tfl.gov.uk/), London’s transport authority, the dates of bank holidays from the [UK Government website]( https://www.gov.uk/bank-holidays), and the weather data from (freemeteo.com).
+
+
+### Descriptive Statistics
+
+Overall, the dataset contains \(n=\) `r format(summary_stats_full$total_obs, big.mark = ",")` observations, each representing a one hour period between `r format(summary_stats_full$start_date, "%d %B %Y")` and `r format(summary_stats_full$last_date, "%d %B %Y")`.
+
+However, for the benefit of assessing the performance of the final algorithm, I partition the original dataset into two parts: a `training` dataset representing the first 90% of observations, ordered by `timestamp`, and a `validation` dataset representing the final 10%. The choice of 10% is fairly arbitrary, but the decision to set aside the final time-ordered observations is designed to prevent information leakage. The [Methodology] section explains further.
+
+The exploratory analysis in this paper exclusively examines the `training` dataset, and the paper only turns to the `validation` set for calculating an out-of-sample measure of predictive performance using the final trained algorithm. The `training` set contains \(n=\) `r format(summary_stats_train$total_obs, big.mark = ",")` observations, each representing a one hour period between `r format(summary_stats_train$start_date, "%d %B %Y")` and `r format(summary_stats_train$last_date, "%d %B %Y")`. It spans `r format(summary_stats_train$total_days, big.mark = ",")` different days, counting `r format(summary_stats_train$total_trips, big.mark = ",")` bike journeys.
+
+The table below describes the ten different columns included in the dataset. Besides time, date, season and journey data, the dataset includes a number of columns containing meteorological data.
+
+```{r echo = FALSE}
+data.frame(
+  Name = c("Timestamp", "Journey Count", "T1", "T2", "Humidity", "Wind Speed", "Weather Code", "Is Holiday", "Is Weekend", "Season"),
+  Variable = c("`timestamp`", "`cnt`", "`t1`", "`t2`", "`hum`", "`wind_speed`", "`weather_code`", "`is_holiday`", "`is_weekend`", "`season`"),
+  Description = c("Date-time of observation, hourly",
+                  "Count of new bike shares started in an hour",
+                  "Real temperature in ̊C",
+                  "'Feels like' temperature in ̊C",
+                  "Humidity as a percentage",
+                  "Wind speed in km per hour",
+                  "1 = Clear / mostly clear but have some values with haze / Fog / Patches of fog / Fog in vicinity; 2 = Scattered clouds / Few clouds; 3 = Broken clouds; 4 = Cloudy; 7 = Rain / Light rain shower/ Light rain; 10 = Rain with thunderstorm; 26 = Snowfall; 94 = Freezing Fog",
+                  "Boolean field - 1 holiday, 0 non-holiday",
+                  "Boolean field - 1 weekend, 0 non-weekend",
+                  "Category field, meteorological season - 0 spring, 1 summer, 2 fall, 3 winter")) %>%
+  knitr::kable( caption = "Variable Descriptions")
+```
+
+The table below reports standard summary statistics for each variable in the `training` dataset for which it makes sense, besides the `timestamp`. It excludes the `weather_code` and `season` since they are categorical variables and these summary statistics. Next, we explore each of the columns in some more detail.
+
+```{r echo = FALSE}
+summary_table_train %>%
+  mutate(cnt = format(round(cnt, 0), big.mark = ","),
+         t1 = format(round(t1, 2)),
+         t2 = format(round(t2, 2)),
+         hum = format(round(hum, 2)),
+         wind_speed = format(round(wind_speed, 1)),
+         is_holiday = format(round(is_holiday, 2)),
+         is_weekend = format(round(is_weekend, 2))) %>%
+  as_tibble() %>%
+  knitr::kable( caption = "Summary Statistics")
+```
+
+
+
+### Journey Count
+
+The `cnt` column reports the number of new bike journeys for each hourly observation. As the table of summary statistics illustrates, it cannot take on negative values since the minimum number of new bike journeys in an hour is zero.
+
+The figure below illustrates the distribution of the values of the `cnt` variable. The left panel shows the `cnt` variable as in the dataset. The distribution is positively skewed, with many values slightly above zero and a long tail trailing to the right. As the right panel shows, after `cnt` is log-transformed, the new distribution appears to be bimodal, with a smaller peak and then a larger peak.
+
+As discussed in the subsections which follow, the peaks in the distribution can be explained by splitting the data according to day of the week and time of day.
+
+```{r echo = FALSE, fig.height = 3.8, fig.width = 7.333333, fig.cap = "Distribution of Observations by Number of Journey (`cnt`)"}
+journey_dist
+```
+
+
+### Day of the Week
+
+Demand for transport in London, as in other large cities, is heavily dependent on the day of the week. Many people live in the wide commuter belt around the city, meaning demand for commuter transport to get to the city centre peaks during the working week. We would expect to observe a similar pattern for shared bikes in the city as commuters cycle to or from work.
+
+```{r}
+
+```
+
+The figure below illustrates exactly this. The left panel shows the distribution of the journey count variable (`cnt`) after log-transformation, separately for each day. The bimodal shape seen in the figure above only appears during the days of the working week. Interestingly, the bimodal distribution appears stable across the working days. The distributions for Saturdays, Sundays, and Holidays appears to have a single peak and similar shapes (once accounting for the relative prevalence of Saturdays and Sundays compared to Holidays).
+
+```{r}
+dist_byday
+```
+
+On the right, two further charts show the proportion of journey on each day and the average number of journeys per day. Bikes are mostly used in the middle of the working week (Tuesday to Thursday) and least often on holidays.
+
+
+### Time of Day
+
+The previous figure shows the number of new bike journeys follows a bimodal distribution during the working week. As we see from the figure below, this distribution is explained by the time of day. Between Monday and Friday, splitting the data into 'day', defined as between 6am and 11pm, and 'night', defined as the remaining hours, separates the observations into two distinct distributions. At weekends and on holidays, however, the two distributions overlap leading to the single, wide-peaked distributions seen above.
+
+```{r}
+dist_byday_bytime
+```
+
+The next figure breaks the distributions down further by hour of the day. We see a scatterplot of the number of new trips started in each hour of the day for every observation in the period. The points are coloured according to whether the hour is during a working or non-working day.
+
+```{r , fig.height = 4, fig.width = 7.333333, echo = FALSE}
+avgplot
+```
+
+The solid lines illustrate the loess best-fit lines. As anticipated by the analysis above, there are distinct patterns: one for working days and one for weekends and holidays. During working days, there are two peaks in bike demand, one between roughly 7am and 9am and the other between 5pm and 8pm. In contrast, at weekends and on holidays bike use follows a smooth curve, reaching its greatest demand in the middle parts of the day.
+
+Clearly, the time of day is crucial for predicting the demand for shared bikes. The distribution of the `cnt` variable splits into two according to whether it is daytime or nighttime and this again splits according to whether or not it is the working week. In other words, there is a tangible relationship between the impact of the day of the week and the impact of the time of day on the demand for bikes. As I describe in the [Methodology] section below, the modelling approach in this paper takes this interdependence into account.  
+
+
+### Month and Season
+
+The month and season will also affect demand for shared bikes. The impact of the month or season on demand is likely related to that of the weather. However, while the weather can be changeable from day to day or even hour to hour, the calendar month or season is highly predictable. For this reason, we would expect both the calendar month / season and the weather data to aid prediction, since people's behaviour will be generally influenced by the season and then additionally so by changes in the weather.
+
+The figure below plots the average number of bike journeys per hour for the three winter months (December to February) and the three summer months (June to August), separately for working and non-working days. During rest days, the number of bike journeys is very sensitive to the season: there are many more bike journeys in the summer than the winter. During working days, we see a similar effect, but interestingly less variability in the number of journeys during morning rush hour than in the evening.
+
+```{r , fig.height = 4, fig.width = 7.333333, echo = FALSE}
+monthplot
+```
+
+Additionally, we might expect to see longer-run trends in shared bike demand, as people's taste for cycling changes. For instance, perhaps due to a gradual improvement in road safety infrastructure for cyclists more people decide to cycle to and from work. For the sake of brevity, and since we have less than 2 years of training data, I will not explore that further here. As the [Methodology] section describes, I nevertheless include year dummy variables as model features.
+
+
+### Weather Effects
+
+The dataset includes five features relating to the weather. Weather varies with the season of the year. However, all else equal, we would still expect bike demand to rise with good weather and fall with bad weather.
+
+The grid of scatterplots below show how bike demand varies with each of the five weather features in the dataset. We see that 
+
+COULD DO THE SCATTERPLOTS CONDITIONING ON SEASON OR MONTH? 5 rows and 4 cols, facet wrap?
+
+```{r}
+print("Array of scatterplots")
+```
+
+
+### Heatmap of Variable Correlation
+
+### Variable Importance
+
+
+## Methodology
+
+
+### Objective
+
+The overall objective of this paper is to construct an algorithm to predict the demand for shared bikes in London. I construct various models and compare their predictions using a variation of the standard RMSE, the **Root Mean Squared Logarithmic Error** or **RMSLE**.
+
+The RMSE is by far the most common loss function used for regression-type prediction problems. It is defined as follows:
+
+\[RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{d,h} (y_{d,h} - \hat{y}_{d,h })^2},\]
+
+where \(y_{d,h}\) and \(\hat{y}_{d,h}\) represent the actual and predicted outcomes on day \(d\) at hour \(h\). 
+In this paper, I use its variant the RMSLE, defined as:
+
+\[RMSLE = \sqrt{\frac{1}{N}\displaystyle\sum_{d,h} (\log(y_{d,h} + 1) – \log(\hat{y}_{d,h } + 1))^2}.\]
+
+This function differs from the RMSE in that, before calculating the difference, or error, it adds 1 to the actual and predicted outcomes and then calculates their natural logarithms. It is common to add a number to the outcome variable before converting it to logarithms, since this prevents the transformation from being undefined for zero-valued outcomes (since function \(\log(x)\) function is undefined at \(x=0\)). I follow the Kaggle shared bike competition in adding 1 as opposed to some other value.
+
+Using the RMSLE is a natural choice if the model is trained using the log-values of an outcome variable. If this is the case, then constructing the RMSLE means simply calculating the RMSE for the log-transformed outcome variable and its prediction. In other words, calculating the RMSLE means skipping the step of transforming the predicted values back to the same units as the original actual outcomes before calculating the RMSE.
+
+
+### Data Preparation
+
+I calculate the natural logarithm of the count outcome variable (`cnt`), and call it `log_cnt`.
+
+Besides the `cnt` outcome variable, the original dataset consists of 9 features. I perform the following on these features:
+
+- I extract the hour of the day, the day of the week, the month of the year, and the year from the `timestamp` variable. Since I have created these new features, I do not use the `timestamp` variable in my analysis.
+
+- I create a series of new features as the interaction between the hour of the day and the day of the week. This allows the analysis to take into account the fact that the impact of the hour of the day will vary greatly depending on the day of the week.
+
+- I convert the weather code and season features, which are each currently categorical features, to a series of 0/1 dummy variables.
+
+- I leave unchanged the temperatures (`t1` and `t2`), the humidity (`hum`), the wind speed (`wind_speed`), and the holiday and weekend dummies (`is_weekend` and `is_holiday`).
+
+
+Cyclical encoding of hours
+Interpolate to fill in gaps in data
+
+
+### Modelling Approach
+
+#### Algorithm Testing and Validation
+
+To evaluate the performance of my final algorithm, I first split the dataset into two parts: one subset for training and testing algorithms (`trainset`) and the other for validating my final algorithm (`validation`). 
+
+Since the data represent a time series, rather than taking a random subset of the dataset, I set the final 2 months of the original dataset aside as the `validation` set. 
+
+#### Simple Linear Regression
+
+As a baseline, I perform sim
+
+
+
+
+## Results
+
+## Concluding Remarks
+
+## References
+
+https://towardsdatascience.com/predicting-no-of-bike-share-users-machine-learning-data-visualization-project-using-r-71bc1b9a7495
+
+https://www.imachordata.com/do-not-log-transform-count-data-bitches/
+
+https://esajournals.onlinelibrary.wiley.com/doi/abs/10.1890/07-0043.1
+http://byrneslab.net/classes/biol607/readings/o'hara_and_kotze_do_not_log_transform.pdf
+
+
+https://towardsdatascience.com/common-loss-functions-in-machine-learning-46af0ffc4d23
+
+https://ianlondon.github.io/blog/encoding-cyclical-features-24hour-time/
+https://www.kaggle.com/avanwyk/encoding-cyclical-features-for-deep-learning
+https://www.oreilly.com/library/view/introduction-to-machine/9781449369880/ch04.html#table_encoding_workclass_feature
+https://towardsdatascience.com/common-loss-functions-in-machine-learning-46af0ffc4d23
