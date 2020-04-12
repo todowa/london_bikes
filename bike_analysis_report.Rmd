@@ -79,7 +79,7 @@ data.frame(
                   "1 = Clear / mostly clear but have some values with haze / Fog / Patches of fog / Fog in vicinity; 2 = Scattered clouds / Few clouds; 3 = Broken clouds; 4 = Cloudy; 7 = Rain / Light rain shower/ Light rain; 10 = Rain with thunderstorm; 26 = Snowfall; 94 = Freezing Fog",
                   "Boolean field - 1 holiday, 0 non-holiday",
                   "Boolean field - 1 weekend, 0 non-weekend",
-                  "Category field, meteorological season - 0 spring, 1 summer, 2 fall, 3 winter")) %>%
+                  "Category field, meteorological season - 0 spring, 1 summer, 2 autumn, 3 winter")) %>%
   knitr::kable( caption = "Variable Descriptions")
 ```
 
@@ -164,20 +164,30 @@ Additionally, we might expect to see longer-run trends in shared bike demand, as
 
 ### Weather Effects
 
-The dataset includes five features relating to the weather. Weather varies with the season of the year. However, all else equal, we would still expect bike demand to rise with good weather and fall with bad weather.
-
-The grid of scatterplots below show how bike demand varies with each of the five weather features in the dataset. We see that 
-
-COULD DO THE SCATTERPLOTS CONDITIONING ON SEASON OR MONTH? 5 rows and 4 cols, facet wrap?
+The dataset includes five features relating to the weather. Weather varies with the season of the year. However, all else equal, we would still expect bike demand to rise with good weather and fall with bad weather. This is what we see in the figure below. Regardless of the season and whether or not it is a working day, a higher than average temperature for that hour in that month of the year tends leads to greater bike demand.
 
 ```{r}
-print("Array of scatterplots")
+temphourplot
 ```
 
 
-### Heatmap of Variable Correlation
+The figure above relies on 'feels like' temperature. As an aside, the same pattern is witnessed for the real temperature. As the plot below illustrates, there is a very high degree of correlation between the two temperature metrics: usually the 'feels like' temperature *reduces* the reported real temperature somewhat in winter / early spring months. Despite the high correlation between the two measures, there remains some difference between the two temperature measures. The models described in the [Methodology] therefore include both as features.
 
-### Variable Importance
+```{r}
+tempplot
+```
+
+The grid of scatterplots below show how bike demand varies with the remaining three weather features in the dataset: weather code, humidity, and wind speed. We see limited evidence of strong correlation between any of the weather features and the number of bike journeys, at least without conditioning on other variables. The humidity seems to have some predictive power: at low levels of humidity, the number of bike journeys is consistently high. The wind speed by contrast shows almost no predictive power. In fact, counterintuitivity, at higher wind speeds there tend to be more more bike journeys, suggesting that there is a confounding factor.
+
+```{r fig.height = 3.2, fig.width = 7.333333, echo = FALSE}
+weatherplots
+```
+
+### Summary
+
+The dataset contains a number of features which appear to be useful for predicting the number of new bike journeys each hour. Time-related features appear particularly important: the day of the week (specifically, whether or not it is a working day) and the hour of the day. Also important is the effect of the seasons, leading in particular to lower bike demand on evening commutes and at weekends.
+
+Weather-related features individually show little predictive power. However, when used together and with the time features, they will add predictive power beyond usual seasonal patterns. Building on these observations, the next section describes the modelling approach used for prediction.
 
 
 ## Methodology
@@ -192,7 +202,7 @@ The RMSE is by far the most common loss function used for regression-type predic
 \[RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{d,h} (y_{d,h} - \hat{y}_{d,h })^2},\]
 
 where \(y_{d,h}\) and \(\hat{y}_{d,h}\) represent the actual and predicted outcomes on day \(d\) at hour \(h\). 
-In this paper, I use its variant the RMSLE, defined as:
+In this paper, I use its variant, the RMSLE, defined as:
 
 \[RMSLE = \sqrt{\frac{1}{N}\displaystyle\sum_{d,h} (\log(y_{d,h} + 1) – \log(\hat{y}_{d,h } + 1))^2}.\]
 

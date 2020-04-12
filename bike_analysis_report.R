@@ -15,7 +15,8 @@ if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.
 if(!require(ggridges)) install.packages("ggridges", repos = "http://cran.us.r-project.org")
 if(!require(ggpubr)) install.packages("ggpubr", repos = "http://cran.us.r-project.org")
 if(!require(patchwork)) install.packages("patchwork", repos = "http://cran.us.r-project.org")
-if(!require(patchwork)) install.packages("scales", repos = "http://cran.us.r-project.org")
+if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
+if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org")
 
 
 
@@ -75,9 +76,6 @@ rm(validation_index, temp, removed)
 ###########################
 # Exploratory data analysis
 ###########################
-
-# Check for missing values in `fullset`
-
 
 # Function to calculate summary statistics
 summary_stats <- function(dataset) {
@@ -218,8 +216,8 @@ dist_byday_bytime <- training %>%
     day_split = factor(ifelse(hour %in% 6:23, "Day (6-23)", "Night (0-5)"))) %>%
   ggplot(aes(cnt, y = ..count.., fill = day_split)) + geom_density(alpha = 0.3, color = NA) +
   scale_fill_manual(values = c("#E69F00", "#999999")) +
-  scale_x_log10(labels = scales::label_comma(accuracy = 1), breaks = c(1, 100, 1000)) +
-  scale_y_continuous(labels = scales::label_comma(accuracy = 1)) +
+  scale_x_log10(labels = scales::label_comma(accuracy = 1), breaks = c(10, 100, 1000)) +
+  scale_y_continuous(labels = scales::label_comma(accuracy = 1), limits = c(0, NA), expand = expand_scale(add = c(0,0))) +
   ylab("Number of observations, n") +
   xlab("Number of new bike journeys, cnt (log10 scale)") +
   facet_wrap(day_of_week3 ~ ., nrow = 2) +
@@ -240,7 +238,7 @@ avgplot <- training %>%
   geom_jitter(alpha = 0.01, width = 0.25) +
   scale_color_manual(values = c("tomato3", "steelblue4")) +
   geom_smooth(method = "loess", span = 0.1, se = FALSE) +
-  scale_y_continuous(labels = scales::label_comma(accuracy = 1)) +
+  scale_y_continuous(labels = scales::label_comma(accuracy = 1), limits = c(0, NA), expand = expand_scale(add = c(0,0))) +
   ylab("Number of new bike journeys, cnt") +
   xlab("Hour") +
   scale_x_continuous(breaks = seq(0, 23, 2)) +
@@ -250,7 +248,6 @@ avgplot <- training %>%
         aspect.ratio = 3 / 5,
         axis.ticks.x = element_line(color = "darkgrey"),
         plot.caption = element_text(hjust = 0))
-
 
 # Plot mean `cnt` by hour for different months
 winter_levels <- c("December", "January", "February")
@@ -283,96 +280,80 @@ monthplot <- training %>%
         axis.ticks.x = element_line(color = "darkgrey")) +
   facet_grid(. ~ week_split)
 
+# Plot `temperature `cnt` against hour for different seasons and temperatures
+foo <- training %>% group_by(month, hour) %>%
+  summarise(avg_t2 = mean(t2))
 
-
-
-
-scale_color_manual(values = c("tomato3", "steelblue4")) +
-  geom_smooth(method = "loess", span = 0.1, se = FALSE) +
-  scale_y_continuous(labels = scales::label_comma(accuracy = 1)) +
-  ylab("Number of new bike journeys, cnt") +
-  xlab("Hour") +
-  scale_x_continuous(breaks = seq(0, 23, 2)) +
-  theme_parts +
-  labs(caption = "Note: 'Non-Working Day' includes Saturdays, Sundays and Holidays.") +
-  theme(legend.title = element_blank(),
-        aspect.ratio = 3 / 5,
-        axis.ticks.x = element_line(color = "darkgrey"),
-        plot.caption = element_text(hjust = 0))
-
-
-training %>% 
-
-
-
-
-
-  
-
-filter(day_of_week3 %in% workday_levels) %>%
-scale_color_manual(values = c("orange1", "orangered1", "springgreen3", "plum3", "royalblue1")) +
-  
-
-  geom_density(aes(hour, y = cnt), stat = "identity")
-
-
-training %>%
-  mutate(log_cnt = log(cnt + 1)) %>%
+temphourplot <- training %>% left_join(foo, by = c("month", "hour")) %>%
   mutate(day_of_week2 = as.factor(ifelse(is_holiday == 1, "Holiday", day_of_week))) %>%
-  mutate(day_of_week3 = factor(day_of_week2, levels = facet_levels)) %>%
-  filter(day_of_week3 == "Thursday") %>%
-  ggplot(aes(timestamp, log_cnt, color = hour)) + geom_point()
+  mutate(week_split = factor(ifelse(day_of_week2 %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Days", "Working Days"))) %>%
+  mutate(t2_category = factor(ifelse(t2 > avg_t2, "High", "Low"))) %>%
+  mutate(season = factor(season, labels = c("Spring", "Summer", "Autumn", "Winter"))) %>%
+  ggplot(aes(hour, cnt, color = t2_category)) +
+  geom_point(alpha = 0.2) +
+  scale_y_continuous(labels = scales::label_comma(accuracy = 1), limits = c(0, NA), expand = expand_scale(add = c(0, 0))) +
+  scale_x_continuous(breaks = seq(0, 23, 4)) +
+  labs(y = "Number of journeys, cnt", x = "Hour") +
+  theme_parts +
+  theme(axis.ticks.x = element_line(color = "darkgrey"),
+        plot.caption = element_text(hjust = 0),
+        legend.position = "bottom") +
+  facet_grid(week_split ~ season) +
+  scale_color_manual(values = c("#E69F00", "dodgerblue4"), name = "'Feels like' temperature") +
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  labs(caption = "Note:\n'High' ('Low') is a temperature greater (less) than average for that hour in that calendar month.")
+rm(foo)
+
+# Plot comparison of temperature metrics
+tempplot <- training %>%
+  mutate(month = factor(month, levels = c(12, 1:11), labels = season_levels_short)) %>%
+  ggplot(aes(t1, t2, color = month)) + geom_point(alpha = 0.1) + theme_parts +
+  theme(panel.grid.minor.x = element_line(size = .1, color = "darkgrey"),
+        panel.grid.major.x = element_line(size = .1, color = "darkgrey"),
+        legend.title = element_blank()) +
+  labs(x = "Real temperature, ̊C", y = "'Feels like' temperature, ̊C") +
+  guides(colour = guide_legend(override.aes = list(alpha = 1)))
+
+# Plot `cnt` against weather variables
+
+#- Weather codes
+p1 <- training %>%
+  mutate(weather_code = factor(weather_code)) %>%
+  ggplot(aes(weather_code, cnt)) +
+  geom_jitter(alpha = 0.05) +
+  scale_y_log10(labels = scales::label_comma(accuracy = 1)) +
+  theme_parts +
+  labs(x = "Weather code", y = "cnt, log10 scale")
+
+#- Humidity
+p2 <- training %>%
+  ggplot(aes(hum, cnt)) + 
+  geom_point(alpha = 0.03) +
+  scale_y_log10(labels = scales::label_comma(accuracy = 1)) +
+  theme_parts + 
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.x = element_line(color = "darkgrey")) +
+  xlab("Humidity, %")
+
+#- Wind speed
+p3 <- training %>%
+  ggplot(aes(wind_speed, cnt)) + 
+  geom_point(alpha = 0.03) +
+  scale_y_log10(labels = scales::label_comma(accuracy = 1)) +
+  theme_parts + 
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.x = element_line(color = "darkgrey")) +
+  xlab("Wind speed, km/h")
 
 
+layout <- "
+ABC
+"
+weatherplots <- p1 + p2 + p3 + plot_layout(design = layout)
+rm(p1, p2, p3, layout)
 
-training %>% mutate(log_cnt = log(cnt)) %>% 
-  mutate(day_of_week2 = factor(day_of_week, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>%ggplot(aes(log_cnt)) +
-  scale_x_continuous(labels = scales::label_comma(accuracy = 1)) +
-  scale_y_continuous(labels = scales::label_comma(accuracy = 1), expand = expand_scale(0, 0.03)) +
-  geom_histogram(fill = "#E69F00", color = "black") +
-  ylab("Number of observations, n") +
-  xlab("Number of new journeys, cnt") +
-  theme_parts
-
-# Distribution of trips across hours, by day of week
-training %>% mutate(day_of_week = as.factor(day_of_week)) %>%
-  group_by(hour, day_of_week) %>%
-  summarise(cnt = sum(cnt)) %>%
-  ggplot(aes(hour, cnt, color = day_of_week)) + geom_line(stat = "identity")
-  facet_grid(day_of_week ~ .)
-
-                    training %>% mutate(day_of_week = as.factor(day_of_week),
-                    log_cnt = log(cnt)) %>%
-  group_by(hour, day_of_week) %>%
-  summarise(cnt = sum(cnt)) %>%
-  ggplot(aes(hour)) +
-  geom_bar() +
-  facet_grid(day_of_week ~ .)
-
-training %>% mutate(log_cnt = log(cnt),
-                    is_weekend = as.factor(is_weekend)) %>%
-  ggplot(aes(log_cnt, fill = is_weekend)) +
-  geom_density_ridges()
-  
-  scale_x_continuous(labels = scales::label_comma(accuracy = 1)) +
-  scale_y_continuous(labels = scales::label_comma(accuracy = 1), expand = expand_scale(0, 0.03)) +
-  geom_histogram(fill = "#E69F00", color = "black") +
-  ylab("Number of observations, n") +
-  xlab("Number of new journeys, cnt") +
-  theme_parts
-
-
-
-
-training %>% filter(is_weekend == 1) %>%
-  mutate(log_cnt = log(cnt)) %>%
-  ggplot(aes(log_cnt)) +
-  scale_x_continuous(labels = scales::label_comma(accuracy = 1)) +
-  scale_y_continuous(labels = scales::label_comma(accuracy = 1), expand = expand_scale(0, 0.03)) +
-  geom_histogram(fill = "#E69F00", color = "black") +
-  ylab("Number of observations, n") +
-  xlab("Number of new journeys, cnt") +
-  theme_parts
 
 
 ###########################################################################
@@ -389,19 +370,13 @@ fullset <- fullset %>% mutate(month = month(timestamp),
 
 fullset %>% head()
 
-# Create `year_season` variable.
-# If winter and in last few months of the year, replace `year_season`
-# with year of previous calendar year.
-SPRING_START_MONTH <- 3
-season_dates <- dat %>% group_by(date) %>% summarise(season = first(season)) %>%
-  mutate(season_start_year = paste0(ifelse(season == 4 & month(date) < 6,
-                                           year(date)-1,
-                                           year(date)))) %>%
-  mutate(year_season = paste0(season_start_year, "_", season)) %>%
-  mutate(season_start_month = season * SPRING_START_MONTH) %>%
-  mutate(season_start_date = make_date(season_start_year, season_start_month, 1)) %>%
-  mutate(season_day = as.numeric(date) - as.numeric(season_start_date) + 1) %>%
-  select(date, season, season_start_year, year_season, season_day)
+
+
+
+
+
+
+
 
 
 
@@ -409,6 +384,8 @@ season_dates <- dat %>% group_by(date) %>% summarise(season = first(season)) %>%
 ##################################
 # Modelling - Set up all functions
 ##################################
+
+
 
 
 
@@ -432,115 +409,4 @@ season_dates <- dat %>% group_by(date) %>% summarise(season = first(season)) %>%
 
 
 
-# Inspect data set
-dat %>% summary() %>% knitr::kable()
-dat %>% head()
 
-# Create date and hour of day features
-dat <- dat %>% mutate(hour = hour(timestamp),
-                      date = date(timestamp))
-
-# Inspect season feature
-dat <- dat %>% mutate(season = season + 1)
-
-
-
-
-
-# Plot count by day of season 
-dat %>% group_by(date) %>%
-  summarise(count = sum(cnt)) %>%
-  left_join(season_dates, by = "date") %>%
-  mutate(year_season = as.factor(year_season),
-         season = as.factor(season)) %>%
-  ggplot(aes(season_day, count, color = season_start_year)) +
-  geom_line() +
-  facet_grid(season~.)
-
-# Plot count by week of season
-dat %>% mutate(week = week(date),
-               year = as.factor(year(date))) %>%
-  group_by(week, year) %>%
-  summarise(count = sum(cnt)) %>%
-  filter(year != 2017) %>%
-  ggplot(aes(week, count, color = year)) +
-  geom_line(size = 1.2)
-
-dat %>% mutate(month = as.integer(month(date)),
-               year = as.factor(year(date))) %>%
-  group_by(month, year) %>%
-  summarise(count = sum(cnt)) %>%
-  ungroup() %>%
-  ggplot(aes(month, count, color = year)) +
-  geom_line(size = 1.2)
-
-dat %>%
-  group_by(year_season) %>%
-  summarise(season_first = first(date),
-            season_last = last(date)) %>%
-  arrange(season_first)
-
-dat %>%
-  mutate(year = year(date)) %>%
-  group_by(is_weekend, year) %>%
-  summarise(cnt = sum(cnt)) %>%
-  ggplot(aes(cnt, year, color = is_weekend)) +
-  geom_bar()
-
-dat
-# Daily summary dataset
-dat_daily <- dat %>% mutate(date = date(timestamp),
-               yearday = yday(date)) %>%
-  group_by(date) %>%
-  summarise(count = sum(cnt),
-            yearday = first(yearday), season = first(season))
-
-
-start_date <- min(date(dat$timestamp))
-end_date <- max(date(dat$timestamp))
-
-date_period <- data.frame(tsday = 1, start = start_date, end = end_date) %>%
-  nest(start, end) %>%
-  mutate(data = map(data, ~seq(unique(.x$start), unique(.x$end), 1))) %>%
-  unnest(data) %>%
-  rename(date = data) %>%
-  mutate(tsday = row_number())
-  
-
-
-start_date
-end_date
-
-data.frame(start_date = max(date(dat$timestamp), end_date =)
-
-dat_daily
-
-dat_daily %>% 
-  mutate(year_season = paste0(year(date), "_", season)) %>%
-  group_by(year_season) %>%
-  summarise(season_first = first(date),
-            season_last = last(date))
-  
-dat %>% arrange(date)  
-
-  summarise(season_first )
-
-  
-# Plot journey count
-dat %>% mutate(date = date(timestamp)) %>%
-  group_by(date) %>%
-  summarise(count = sum(cnt)) %>%
-  ggplot(aes(date, count)) + geom_line()
-
-# Plot journey count by season
-dat %>% mutate(date = date(timestamp),
-               season = as.factor(season),
-               yearday = yday(date)) %>%
-  group_by(date) %>%
-  summarise(count = sum(cnt), yearday = first(yearday), season = first(season)) %>%
-  ggplot(aes(yearday, count, color = season)) + geom_line()
-
-
-dat %>% group_by(season) %>% 
-  mutate(date = date(timestamp), yearday = yday(date))
-  summarise(season_first = first(season), season_last = )
