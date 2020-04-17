@@ -1,7 +1,7 @@
 #############################
 # London bike demand
 # 
-# Date: 16 April 2020
+# Date: 17 April 2020
 # Author: Tom Dorrington Ward
 #############################
 
@@ -75,7 +75,7 @@ create_train <- function(dataset, test_proportion) {
   train <- dataset[-test_index, ]
   temp <- dataset[test_index, ]
   
-  # Make sure `hour` and `day_of_week` in `test` set are also in `train` set
+  # Make sure `hour` and `wday` in `test` set are also in `train` set
   test <- temp %>% 
     semi_join(train, by = "hour") %>%
     semi_join(train, by = "wday")
@@ -172,28 +172,30 @@ shortdays <- substr(facet_levels,1,3)
 
 # Plot distribution of `cnt` variable by day of week (log-transformed)
 p1 <- training %>%
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
-  mutate(wday3 = factor(wday2, levels = facet_levels)) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                        labels = c(levels(wday), "Holiday"))) %>%
+  mutate(wday_holiday2 = factor(wday_holiday, levels = facet_levels)) %>%
   ggplot(aes(cnt)) +
   geom_histogram(fill = rep(c("seagreen3", "seagreen4"), 240/2)) +
-  scale_x_log10(labels = scales::label_comma(accuracy = 1), breaks = c(1, 100, 1000)) +
+  scale_x_log10(labels = scales::label_comma(accuracy = 1), breaks = c(10, 100, 1000)) +
   scale_y_continuous(labels = scales::label_comma(accuracy = 1), limits = c(0, NA), expand = expand_scale(add = c(0, 0.03))) +
   theme_parts +
   theme(plot.caption = element_text(hjust = 0),
         axis.ticks.x = element_line(color = "darkgrey")) +
-  facet_wrap(. ~ wday3, ncol = 4) +
+  facet_wrap(. ~ wday_holiday2, ncol = 4) +
   labs(x = "Number of new bike journeys, cnt (log10 scale)",
        y = "Number of observations, n",
        caption = "Notes:\nIf an observation has an `is_holiday` value of 1, it is included in the 'Holiday' chart and excluded from\nits corresponding weekday chart.\nTo accommodate the log10 scale, one observations with `cnt` of zero has been removed.")
 
 # Plot proportion of journeys by day
 p2 <- training %>% 
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
-  mutate(wday3 = factor(wday2, levels = facet_levels)) %>%
-  group_by(wday3) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                               labels = c(levels(wday), "Holiday"))) %>%
+  mutate(wday_holiday2 = factor(wday_holiday, levels = facet_levels)) %>%
+  group_by(wday_holiday2) %>%
   summarise(total = sum(cnt)) %>%
   mutate(prop = total / sum(total)) %>%
-  ggplot(aes(wday3, prop)) +
+  ggplot(aes(wday_holiday2, prop)) +
   geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::label_percent(accuracy = 1), expand = expand_scale(add = c(0, 0))) +
   scale_x_discrete(labels = shortdays) +
@@ -205,12 +207,13 @@ p2 <- training %>%
 
 # Plot average number of journeys per day
 p3 <- training %>% 
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
-  mutate(wday3 = factor(wday2, levels = facet_levels)) %>%
-  group_by(wday3) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                               labels = c(levels(wday), "Holiday"))) %>%
+  mutate(wday_holiday2 = factor(wday_holiday, levels = facet_levels)) %>%
+  group_by(wday_holiday2) %>%
   summarise(total = sum(cnt), avg = mean(cnt)) %>%
   mutate(prop = total / sum(total)) %>%
-  ggplot(aes(day_of_week3, avg)) + geom_bar(stat = "identity") +
+  ggplot(aes(wday_holiday2, avg)) + geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::label_comma(accuracy = 1), expand = expand_scale(add = c(0, 0))) +
   scale_x_discrete(labels = shortdays) +
   theme_parts +
@@ -229,8 +232,9 @@ rm(p1, p2, p3, layout)
 
 # Plot distribution of `cnt` by time of day (day or night) and day of week
 dist_byday_bytime <- training %>% 
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
-  mutate(wday3 = factor(wday2, levels = facet_levels)) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                               labels = c(levels(wday), "Holiday"))) %>%
+  mutate(wday_holiday2 = factor(wday_holiday, levels = facet_levels)) %>%
   mutate(
     day_split = factor(ifelse(hour %in% 6:23, "Day (6-23)", "Night (0-5)"))) %>%
   ggplot(aes(cnt, y = ..count.., fill = day_split)) + geom_density(alpha = 0.3, color = NA) +
@@ -239,7 +243,7 @@ dist_byday_bytime <- training %>%
   scale_y_continuous(labels = scales::label_comma(accuracy = 1), limits = c(0, NA), expand = expand_scale(add = c(0,0))) +
   ylab("Number of observations, n") +
   xlab("Number of new bike journeys, cnt (log10 scale)") +
-  facet_wrap(wday3 ~ ., nrow = 2) +
+  facet_wrap(wday_holiday2 ~ ., nrow = 2) +
   theme_parts +
   labs(fill = "Time of day",
        caption = "Note: To accommodate the log10 scale, one observations with `cnt` of zero has been removed.") +
@@ -250,9 +254,11 @@ dist_byday_bytime <- training %>%
 
 # Plot mean average `cnt` by hour
 avgplot <- training %>%
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                               labels = c(levels(wday), "Holiday"))) %>%
   mutate(
-    week_split = factor(ifelse(wday2 %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Day", "Working Day"))) %>%
+    week_split = factor(ifelse(wday_holiday %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Day", "Working Day")),
+    hour = as.numeric(hour) - 1) %>%
   ggplot(aes(hour, cnt, col = week_split)) +
   geom_jitter(alpha = 0.01, width = 0.25) +
   scale_color_manual(values = c("tomato3", "steelblue4")) +
@@ -281,10 +287,12 @@ summer_palette <- c("chocolate2", "chocolate3", "chocolate4")
 season_palette <- c(winter_palette, summer_palette)
 
 monthplot <- training %>%
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                               labels = c(levels(wday), "Holiday"))) %>%
   mutate(
-    week_split = factor(ifelse(wday2 %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Days", "Working Days"))) %>%
-  mutate(month = factor(month, levels = c(12, 1:11), labels = season_levels_short)) %>%
+    week_split = factor(ifelse(wday_holiday %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Days", "Working Days"))) %>%
+  mutate(month = factor(month, levels = c(12, 1:11), labels = season_levels_short),
+         hour = as.numeric(hour) - 1) %>%
   group_by(month, hour, week_split) %>%
   summarise(cnt = mean(cnt)) %>%
   filter(month %in% c("Dec", "Jan", "Feb", "Jun", "Jul", "Aug")) %>%
@@ -304,10 +312,12 @@ foo <- training %>% group_by(month, hour) %>%
   summarise(avg_t2 = mean(t2))
 
 temphourplot <- training %>% left_join(foo, by = c("month", "hour")) %>%
-  mutate(wday2 = as.factor(ifelse(is_holiday == 1, "Holiday", wday))) %>%
-  mutate(week_split = factor(ifelse(wday2 %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Days", "Working Days"))) %>%
+  mutate(wday_holiday = factor(ifelse(is_holiday == 1 & is_weekend == 0, 8 , wday),
+                               labels = c(levels(wday), "Holiday"))) %>%
+  mutate(week_split = factor(ifelse(wday_holiday %in% c("Saturday", "Sunday", "Holiday"), "Non-Working Days", "Working Days"))) %>%
   mutate(t2_category = factor(ifelse(t2 > avg_t2, "High", "Low"))) %>%
   mutate(season = factor(season, labels = c("Spring", "Summer", "Autumn", "Winter"))) %>%
+  mutate(hour = as.numeric(hour) - 1) %>%
   ggplot(aes(hour, cnt, color = t2_category)) +
   geom_point(alpha = 0.2) +
   scale_y_continuous(labels = scales::label_comma(accuracy = 1), limits = c(0, NA), expand = expand_scale(add = c(0, 0))) +
@@ -330,7 +340,7 @@ tempplot <- training %>%
   theme(panel.grid.minor.x = element_line(size = .1, color = "darkgrey"),
         panel.grid.major.x = element_line(size = .1, color = "darkgrey"),
         legend.title = element_blank()) +
-  labs(x = "Real temperature, ̊C", y = "'Feels like' temperature, ̊C") +
+  labs(x = "Real temperature, Celsius", y = "'Feels like' temperature, Celsius") +
   guides(colour = guide_legend(override.aes = list(alpha = 1)))
 
 # Plot `cnt` against weather variables
@@ -469,8 +479,6 @@ scale_features <- function(dataset, mean_std) {
   data <- model.matrix( ~ . - 1, data = dataset)
   data <- predict(mean_std, data)
   data <- as_tibble(data)
-  # Exclude features which lead to NA coefficients;
-  # avoids rank deficiency.
   data <- model.matrix( ~ . - 1, data = data)
   data <- as_tibble(data)
   data
@@ -519,8 +527,8 @@ calculate_reg_regression <- function(train, test, alpha = 1) {
   y_train <- log1p(train$cnt)
   y_test <- log1p(test$cnt)
   
-  X_train <- as.matrix(train %>% select(-cnt))
-  X_test <- as.matrix(test %>% select(-cnt))
+  X_train <- as.matrix(train %>% select(-c(cnt, year2017)))
+  X_test <- as.matrix(test %>% select(-c(cnt, year2017)))
   
   alpha <- alpha # alpha equals 0 for L2 regularization
 
