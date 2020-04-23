@@ -22,8 +22,8 @@ Included in the repository are the following:
 
 1. Ensure that the data set is saved at the correct relative path specified in line 28 of the `.R` file.
 
-2. Run the `.R` file. The `.R` file **must** be run first to generate various figures as well as the results of the modelling, in order for the report to be generated correctly.
+2. Run the `.R` file. In order for the report to be generated correctly, the `.R` file **must** be run **first** to generate various figures as well as the results of the modelling.
 
-2. Run the `.Rmd` file to generates the results in the report.
+3. Run the `.Rmd` file to generates the results in the report.
 
-3. Knit the `.Rmd` file to PDF to generate the `.pdf` report.
+4. Knit the `.Rmd` file to PDF to generate the `.pdf` report.
