@@ -1,7 +1,7 @@
 #############################
 # London bike demand
 # 
-# Date: 17 April 2020
+# Date: 23 April 2020
 # Author: Tom Dorrington Ward
 #############################
 
@@ -535,11 +535,11 @@ calculate_reg_regression <- function(train, test, alpha = 1) {
   lambdas_to_try <- 10^seq(-10, 10, length.out = 100)
   cv <- cv.glmnet(X_train, y_train, alpha = alpha, lambda = lambdas_to_try)
   lambda <- cv$lambda.1se
-  fit <- glmnet(X_train, y_train, lambda = lambda, alpha = alpha)
+  fit <- glmnet(X_train, y_train, lambda = lambdas_to_try, alpha = alpha)
 
   # Calculate in-sample RMSLE:
-  y_hat_train <- predict(fit, X_train)
-  y_hat_test  <- predict(fit, X_test)
+  y_hat_train <- predict(fit, s = lambda, newx = X_train)
+  y_hat_test  <- predict(fit, s = lambda, newx = X_test)
   
   # Use rmse() function from ModelMetrics to calculate RMSLE of original `cnt` variable
   # and its prediction (equal to exp(y_hat_lm) - 1).
@@ -631,20 +631,20 @@ if (which.min(c(rmsle_lm, rmsle_L2, rmsle_L1)) == 1) {
   alpha <- 0
   best_lambda <- results_L2$cv$lambda.1se
   X_training <- as.matrix(training %>% select(-cnt))
-  fitted_model <- glmnet(X_training, y_training, lambda = best_lambda, alpha = alpha)
-  y_hat_training   <- predict(fitted_model, X_training)
+  fitted_model <- glmnet(X_training, y_training, alpha = alpha)
+  y_hat_training   <- predict(fitted_model, s = best_lambda, newx = X_training)
   X_validation <- as.matrix(validation %>% select(-cnt))
-  y_hat_validation <- predict(fitted_model, X_validation)
+  y_hat_validation <- predict(fitted_model, s = best_lambda, newx = X_validation)
   
 } else if (which.min(c(rmsle_lm, rmsle_L2, rmsle_L1)) == 3){
   cat("Fit L1 Regularized Model")
   alpha <- 1
   best_lambda <- results_L1$cv$lambda.1se
   X_training <- as.matrix(training %>% select(-cnt))
-  fitted_model <- glmnet(X_training, y_train, lambda = best_lambda, alpha = alpha)
-  y_hat_training   <- predict(fitted_model, X_training)
+  fitted_model <- glmnet(X_training, y_training, alpha = alpha)
+  y_hat_training   <- predict(fitted_model, s = best_lambda, newx = X_training)
   X_validation <- as.matrix(validation %>% select(-cnt))
-  y_hat_validation <- predict(fitted_model, X_validation)
+  y_hat_validation <- predict(fitted_model, s = best_lambda, newx = X_validation)
   
 }
 

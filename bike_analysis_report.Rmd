@@ -1,7 +1,7 @@
 ---
-title: "Forecasting Shared Bike Usage in London"
+title: "Predicting Shared Bike Usage in London"
 author: "Tom Dorrington Ward"
-date: "17 April 2020"
+date: "23 April 2020"
 output:
   pdf_document:
     toc: true
@@ -28,22 +28,19 @@ if(!exists("rmse_validation")) {source("bike_analysis_report.R")}
 
 In this project, I use data science and machine learning techniques learned on the HarvardX [*Data Science Professional Certificate*](https://www.edx.org/professional-certificate/harvardx-data-science) programme on [edX](https://www.edx.org/) to predict the demand for shared bikes in London. This paper forms my final project for the capstone course.
 
-Kaggle, the online data science community, offers a competition to [forecast shared bike demand]( https://www.kaggle.com/c/bike-sharing-demand) on a scheme in Washington DC, the [Capital Bikeshare]( https://www.capitalbikeshare.com/about).^[See the competition's page for further details (https://www.kaggle.com/c/bike-sharing-demand), last accessed 17 April 2020.] Rather than taking that widely used dataset, I use data on a similar bike scheme in London, also available from the Kaggle platform. On the one hand, I examine shared bike demand because there are already a large number of analyses out there to learn from.^[See for example the large number of notebooks attached to Kaggle's competition. See also this article on Towards Data Science (https://towardsdatascience.com/predicting-no-of-bike-share-users-machine-learning-data-visualization-project-using-r-71bc1b9a7495), last accessed 17 April 2020.] On the other hand, I choose to examine London as opposed to Washington DC, since there are fewer analyses of London’s data already out there.
+Kaggle, the online data science community, offers a competition to [forecast shared bike demand](https://www.kaggle.com/c/bike-sharing-demand) on a scheme in Washington DC, the [Capital Bikeshare]( https://www.capitalbikeshare.com/about).^[See the competition's page for further details (https://www.kaggle.com/c/bike-sharing-demand), last accessed 23 April 2020.] Rather than taking that widely used dataset, I use data on a similar bike scheme in London, also available from the Kaggle platform. On the one hand, I examine shared bike demand because there are already a large number of analyses out there to learn from.^[See for example the large number of notebooks attached to Kaggle's competition.] On the other hand, I choose to examine London as opposed to Washington DC, since there are fewer analyses of London’s data already out there.
 
-The demand for shared bikes is measured as a frequency or count variable, which tallies the number of new trips started each hour. As a result, it cannot take on negative values, and unlike the Gaussian distribution is skewed with a long tail towards higher count values.
-Kaggle implicitly acknowledges the skewed shape of the distribution, since for any competition entry, before calculating the standard Root Mean Squared Error or RMSE measure of prediction performance, it first transforms the count outcome variable. Kaggle transforms both the actual count and its predicted counterpart by taking their logarithms, leading to what is known as the Root Mean Squared *Logarithmic* Error or RMSLE. I define the RMSLE in the [Methodology] section of this report.
+The demand for shared bikes is measured as a frequency or count variable, which tallies the number of new trips started each hour. As a result, unlike a Normal random variable, it cannot take on negative values and its distribution is skewed with a long tail towards higher count values. Kaggle implicitly acknowledges the skewed shape of the distribution, since for any competition entry, before calculating the standard Root Mean Squared Error or RMSE measure of prediction performance, it first transforms the count outcome variable. Kaggle transforms both the actual count and its predicted counterpart by taking their logarithms, leading to what is known as the Root Mean Squared *Logarithmic* Error or RMSLE. Log-transforming the outcome variable is a common practice in data science, especially with count variables, which may be assumed to be Poisson (or similar) distributed. I define the RMSLE in the [Methodology] section of this report.
 
-Log-transforming the outcome variable is a common practice in data science, especially with count variables. By making this log-transformation, we assume that the count variable follows a distribution from the Poisson family of distributions.
+In this paper, I compare a number of machine learning models for predicting bike demand. First, I train a standard linear model to predict the log-transformed count outcome. Second, I train two penalized linear models - Ridge and Lasso - to see whether I can improve the prediction. As I explain in the [Methodology], the intuition behind these two models takes into account the bias-variance tradeoff: they reduce model variance at the expense of greater bias, with the overall aim of improving prediction.
 
-In this paper, I compare a number of machine learning models for predicting bike demand. First, I train a standard linear model to predict the log-transformed count outcome. Second, I train two penalized linear models - Ridge and Lasso - to see whether I can improve the prediction. As I explain in the [Methodology], the intuition behind these two models takes into account the bias-variance tradeoff: they reduce variance but at the expense of greater bias.
-
-I compare the results of the various models using the RMSLE as the measure of goodness-of-fit, where the error is calculated by taking the difference between the log-transformation of the actual count variable and its predicted counterpart.
+I compare the results of the various models using the RMSLE as the measure of goodness-of-fit, where the error, or residual, is calculated by taking the difference between the log-transformed actual count variable and its predicted counterpart.
 
 The remainder of this paper proceeds as follows:
 
 1.	First, the [Exploring the Dataset] section describes and explores the London bike sharing dataset in detail. The results of this exploration feed directly into the choice of predictors in the modelling.
 
-2.	Next, the [Methodology] section builds on the previous data exploration step by describing the modelling approach. It begins by outlining the objective of this paper and defines the RMSLE loss functions. It briefly describes the cleaning and feature preparation steps taken, before describing the particular machine learning models I apply.
+2.	Next, the [Methodology] section builds on the previous data exploration step by describing the modelling approach. It begins by more formally describing the objective of this paper and defines the RMSLE loss function. It then describes the cleaning and feature preparation steps taken, before describing the particular machine learning models I apply.
 
 3.	Next, the [Results] section describes the results of the various modelling approaches. It also presents a final RMSLE for prediction on a previously *untouched* dataset.
 
@@ -54,20 +51,20 @@ The remainder of this paper proceeds as follows:
 
 The analysis in this paper uses a time series dataset downloaded from [Kaggle](https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset), which counts the number of new trips on London’s cycle hire scheme each hour for the period from `r format(summary_stats_full$start_date, "%d %B %Y")` to `r format(summary_stats_full$last_date, "%d %B %Y")`.
 
-The bike scheme in London is officially called [Santander Cycles]( https://tfl.gov.uk/modes/cycling/santander-cycles) (previously Barclays Cycle Hire), though the bikes are colloquially known as “Boris bikes”, named after Boris Johnson, London’s mayor when the scheme was implemented. The scheme allows any member of the public to easily hire and ride a bike for a one-direction trip by collecting a bike from a [docking station](https://tfl.gov.uk/modes/cycling/santander-cycles/find-a-docking-station?intcmp=2321) and returning it to another station located around central London. As of today, there is a network of 750 docking stations around the UK’s capital with over 11,500 bikes.
+The bike scheme in London is officially called [Santander Cycles]( https://tfl.gov.uk/modes/cycling/santander-cycles) (previously Barclays Cycle Hire), though the bikes are colloquially known as “Boris bikes”, after Boris Johnson, London’s mayor when the scheme was implemented. The scheme allows any member of the public to easily hire and ride a bike for a one-direction trip by collecting a bike from a [docking station](https://tfl.gov.uk/modes/cycling/santander-cycles/find-a-docking-station?intcmp=2321) and returning it to another station located around central London. As of today, there is a network of 750 docking stations around the UK’s capital with over 11,500 bikes.
 
-Besides counting bike trips, the dataset also includes a number of other variables which are likely useful for predicting the number of trips, including the dates of bank holiday and weather data.
+Besides counting bike trips, the dataset also includes a number of other variables which are likely useful for predicting the number of trips, including the dates of bank holiday and recorded weather data.
 
-Although I download the full dataset from Kaggle, the dataset’s [webpage]( https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset) makes clear the original sources of the data. The bike data is originally gathered from [Transport for London (TfL)](https://cycling.data.tfl.gov.uk/), London’s transport authority, the dates of bank holidays from the [UK Government website]( https://www.gov.uk/bank-holidays), and the weather data from (freemeteo.com).
+Although I download the full dataset from Kaggle, the dataset’s [webpage]( https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset) makes clear the original sources of the data. The bike data is originally gathered from [Transport for London (TfL)](https://cycling.data.tfl.gov.uk/), London’s transport authority, the dates of bank holidays from the [UK Government website]( https://www.gov.uk/bank-holidays), and the weather data from www.freemeteo.com.
 
 
 ## Descriptive Statistics
 
-Overall, the dataset contains \(n=\) `r format(summary_stats_full$total_obs, big.mark = ",")` observations, each representing a one hour period between `r format(summary_stats_full$start_date, "%d %B %Y")` and `r format(summary_stats_full$last_date, "%d %B %Y")`.
+Overall, the dataset contains \(n=\) `r format(summary_stats_full$total_obs, big.mark = ",")` observations, each representing a one-hour period between `r format(summary_stats_full$start_date, "%d %B %Y")` and `r format(summary_stats_full$last_date, "%d %B %Y")`.
 
-However, for the benefit of assessing the performance of the final algorithm, I partition the original dataset into two parts: a `training` dataset representing the first 90% of observations, ordered by `timestamp`, and a `validation` dataset representing the remaining 10%. The choice of 10% is fairly arbitrary, but the decision to set aside the final time-ordered observations is designed to simplify the calculation.
+For the benefit of assessing the performance of the final algorithm, however, I partition the original dataset into two parts: a `training` dataset representing the first 90% of observations, ordered by `timestamp`, and a `validation` dataset representing the remaining 10%. The choice of 10% is fairly arbitrary, but the decision to set aside the final time-ordered observations is designed to simplify the calculations.
 
-The exploratory analysis in this paper exclusively examines the `training` dataset, and the paper only turns to the `validation` set for calculating an out-of-sample measure of predictive performance using the final trained algorithm. The `training` set contains \(n=\) `r format(summary_stats_train$total_obs, big.mark = ",")` observations, each representing a one hour period between `r format(summary_stats_train$start_date, "%d %B %Y")` and `r format(summary_stats_train$last_date, "%d %B %Y")`. It spans `r format(summary_stats_train$total_days, big.mark = ",")` different days, counting `r format(summary_stats_train$total_trips, big.mark = ",")` bike journeys.
+The exploratory analysis in this paper exclusively examines the `training` dataset, and the paper only turns to the `validation` set for calculating an out-of-sample measure of predictive performance using the final trained algorithm. The `training` set contains \(n=\) `r format(summary_stats_train$total_obs, big.mark = ",")` observations, each representing a one-hour period between `r format(summary_stats_train$start_date, "%d %B %Y")` and `r format(summary_stats_train$last_date, "%d %B %Y")`. It spans `r format(summary_stats_train$total_days, big.mark = ",")` different days, counting `r format(summary_stats_train$total_trips, big.mark = ",")` bike journeys.
 
 Table \ref{tab:tab1} describes the ten different columns included in the dataset. Besides time, date, season and journey data, the dataset includes a number of columns containing meteorological data.
 
@@ -89,7 +86,7 @@ data.frame(
   kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
 ```
 
-Table \ref{tab:tab2} reports standard summary statistics for each variable in the `training` dataset for which it makes sense, besides the `timestamp`. It excludes the `weather_code` and `season` since they are categorical variables for which these summary statistics cannot easily be calculated. Next, we explore each of the columns in greater detail.
+Table \ref{tab:tab2} reports standard summary statistics for each quantitative variable in the `training` dataset, besides the `timestamp`. It excludes the `weather_code` and `season` since they are categorical variables for which these summary statistics cannot easily be calculated. Next, we explore each of the columns in greater detail.
 
 ```{r tab2, echo = FALSE, message = FALSE, warning = FALSE}
 summary_table_train %>%
@@ -123,34 +120,34 @@ journey_dist
 
 ## Day of the Week
 
-Demand for transport in London, as in other large cities, is heavily dependent on the day of the week. Many people live in the wide commuter belt around the city, meaning demand for commuter transport to get to the city centre peaks during the working week. We would expect to observe a similar pattern for shared bikes in the city as commuters cycle to or from work.
+Demand for transport in London, as in other large cities, is heavily dependent on the day of the week. Many people live in the wide commuter belt around the city, meaning demand for commuter transport, such as trains and buses, peaks during the working week. We would expect to observe a similar pattern for shared bikes in the city as commuters cycle to or from work.
 
 Figure 2 illustrates exactly this. The left panel shows the distribution of the journey count variable (`cnt`) after log-transformation, separately for each day. The bimodal shape seen in Figure 1 only appears during the days of the working week. Interestingly, the bimodal distribution appears stable across the working days. The distributions for Saturdays, Sundays, and Holidays appears to have a single peak and similar shapes (once accounting for the relative prevalence of Saturdays and Sundays compared to Holidays).
+
+On the right, two further charts show the proportion of journey on each day and the average number of journeys per day. Bikes are mostly used in the middle of the working week (Tuesday to Thursday) and least often on holidays.
 
 ```{r fig2, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Distribution of Number of New Bike Journeys (`cnt`) by Day of the Week"}
 dist_byday
 ```
 
-On the right, two further charts show the proportion of journey on each day and the average number of journeys per day. Bikes are mostly used in the middle of the working week (Tuesday to Thursday) and least often on holidays.
-
 
 ## Time of Day
 
-Figure 2 shows the number of new bike journeys follows a bimodal distribution during the working week. As we see from the next figure, Figure 3, this distribution is explained by the time of day. Between Monday and Friday, splitting the data into 'day', defined as between 6am and 11pm, and 'night', defined as the remaining hours, separates the observations into two distinct distributions. At weekends and on holidays, however, the two distributions overlap leading to the single, wide-peaked distributions seen above.
+Figure 2 shows the number of new bike journeys follows a bimodal distribution during the working week. As we see from the next figure, Figure 3, this distribution is explained by the time of day. Between Monday and Friday, splitting the data into 'day', defined as between 6am and 11pm, and 'night', defined as the remaining hours, separates the observations into two distinct distributions. At weekends and on holidays, however, the two distributions overlap leading to the single, wide-peaked distributions we see in Figure 2.
 
-```{r fig3, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Distribution of Number of New Bike Journeys (`cnt`) by Day of the Week and Time of Day"}
+```{r fig3, fig.height = 4.5, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Distribution of Number of New Bike Journeys (`cnt`) by Day of the Week and Time of Day"}
 dist_byday_bytime
 ```
 
-Figure 4 breaks the distributions down further by hour of the day. We see a scatterplot of the number of new trips started in each hour of the day for every observation in the period. The points are coloured according to whether the hour is during a working or non-working day.
+Figure 4 breaks the distributions down further by hour of the day. We see a scatterplot of the number of new trips started each hour, covering every observation in the period. The points are coloured according to whether the hour is during a working day (blue) or non-working day (red).
 
 ```{r fig4, fig.height = 4, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Scatterplot of Number of New Bike Journeys (`cnt`) by Hour of Day and Type of Day"}
 avgplot
 ```
 
-The solid lines illustrate the loess best-fit lines. As anticipated by the analysis above, there are distinct patterns: one for working days and one for weekends and holidays. During working days, there are two peaks in bike demand, one between roughly 7am and 9am and the other between 5pm and 8pm. In contrast, at weekends and on holidays bike use follows a smooth curve, reaching its greatest demand in the middle parts of the day.
+The solid lines illustrate the loess best-fit lines. As anticipated by the analysis above, there are distinct patterns: one for working days and one for weekends and holidays. During working days, there are two peaks in bike demand, one between roughly 7am and 9am and the other between 5pm and 8pm. In contrast, at weekends and on holidays bike use follows a smooth curve, reaching its greatest demand in the middle part of the day.
 
-Clearly, the time of day is crucial for predicting the demand for shared bikes. The distribution of the `cnt` variable splits into two according to whether it is daytime or nighttime and this again splits according to whether or not it is the working week. In other words, there is a tangible relationship between the impact of the day of the week and the impact of the time of day on the demand for bikes. As I describe in the [Methodology] section below, the modelling approach in this paper takes this interdependence into account.  
+Clearly, the time of day is crucial for predicting the demand for shared bikes. The distribution of the `cnt` variable splits into two according to whether it is daytime or nighttime and this again splits according to whether or not it is the working week. In other words, there is a tangible interaction between the impact of the day of the week and the impact of the time of day on the demand for bikes. As I describe in the [Methodology] section below, the modelling approach in this paper takes this interdependence into account.  
 
 
 ## Month and Season
@@ -163,21 +160,21 @@ Figure 5 plots the average number of bike journeys per hour for the three winter
 monthplot
 ```
 
-Additionally, we might expect to see longer-run trends in shared bike demand, as people's taste for cycling changes. For instance, perhaps due to a gradual improvement in road safety infrastructure for cyclists more people decide to cycle to and from work. For the sake of brevity, and since we have less than 2 years of training data, I will not explore that further here. As the [Methodology] section describes, I nevertheless include a year dummy variable as a model feature.
+Additionally, we might expect to see longer-run trends in shared bike demand, as people's taste for cycling evolves. For instance, perhaps due to a gradual improvement in road safety infrastructure for cyclists more people decide to cycle to and from work. For the sake of brevity, and since we have less than 2 years of training data, I will not explore that further here. As the [Methodology] section describes, I nevertheless include a year dummy variable as a model feature to capture this potential effect.
 
 
 ## Weather Effects
 
-The dataset includes five features relating to the weather. Weather varies with the season of the year; however, all else equal, we would still expect bike demand to rise with good weather and fall with bad weather. This is what we see in Figure 5. Particularly in spring and summer, regardless of whether or not it is a working day, a higher than average temperature for that time of year tends to lead to greater bike demand.
+The dataset includes five features related to the weather. Weather varies with the season of the year; however, all else equal, we would still expect bike demand to rise with good weather and fall with bad weather. This is what we see in Figure 5. Particularly in spring and summer, regardless of whether or not it is a working day, a higher than average temperature for that time of year tends to lead to greater bike demand.
 
-```{r fig6, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Scatterplot of Number of New Bike Journeys (`cnt`) by Season and 'Feels-Like' Temperature"}
+```{r fig6, fig.height = 4.5, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Scatterplot of Number of New Bike Journeys (`cnt`) by Season and 'Feels-Like' Temperature"}
 temphourplot
 ```
 
 
 Figure 6 relies on 'feels like' temperature, though the same pattern is witnessed for the real temperature. As Figure 7 illustrates, there is a very high degree of correlation between the two temperature metrics: usually the 'feels like' temperature *reduces* the reported real temperature somewhat in winter / early spring months. Despite the high correlation between the two measures, there remains some difference between the two temperature measures. The models described in the [Methodology] therefore include both as features.
 
-```{r fig7, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Comparison of Temperature Features"}
+```{r fig7, fig.height = 3.2, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Comparison of Temperature Features"}
 tempplot
 ```
 
@@ -199,37 +196,32 @@ Weather-related features individually show little predictive power. However, whe
 
 ## Objective
 
-The overall objective of this paper is to construct an algorithm to predict the demand for shared bikes in London. I construct various models and compare their predictions using a variation of the standard RMSE, the **Root Mean Squared Logarithmic Error** or **RMSLE**.
+The overall objective of this paper is to construct an algorithm to predict the demand for shared bikes in London. I construct various models and compare their predictions using a variation of the standard RMSE, the *Root Mean Squared Logarithmic Error*, or *RMSLE*.
 
 The RMSE is by far the most common loss function used for regression-type prediction problems. It is defined as follows:
 
 \[RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{i} (c_{i} - \hat{c}_{i})^2},\]
 
-where \(c_{i}\) and \(\hat{c}_{i}\) represent the actual and predicted `cnt` for each observation date-time \(i\). 
-In this paper, I use its variant, the RMSLE, defined as:
+where \(c_{i}\) and \(\hat{c}_{i}\) represent the actual and predicted `cnt` for each observation date-time \(i\). In this paper, I use its variant, the RMSLE, defined as:
 
 \[RMSLE = \sqrt{\frac{1}{N}\displaystyle\sum_{i} (\log(c_{i} + 1) - \log(\hat{c}_{i} + 1))^2}.\]
 
-This function differs from the RMSE in that, before calculating the difference, or error, it adds 1 to the actual and predicted outcomes and then calculates their natural logarithms. Substituting in \(y_{i} = \log(c_{i} + 1)\) and \(\hat{y}_{i} = \log(\hat{c}_{i} + 1)\), we see that if our outcome variable is not `cnt` but its log-transformed value \(y\), then the formula reduces to the usual RMSE.
+The RMSLE function differs from the RMSE in that, before calculating the difference, or error, it adds 1 to the actual and predicted outcomes and then calculates their natural logarithms. Substituting in \(y_{i} = \log(c_{i} + 1)\) and \(\hat{y}_{i} = \log(\hat{c}_{i} + 1)\), we see that if our outcome variable is not `cnt` but its log-transformed value \(y\), then the formula reduces to the usual RMSE.
 
-When using a count variable, it is usual to perform a log-transformation since it treats the original count variable as coming from the Poisson family of distributions, which are distributions commonly used to represent count or frequency data.
-
-It is common also to add a number to the outcome variable before converting it to logarithms, since this prevents the transformation from being undefined for zero-valued outcomes (since function \(\log(x)\) function is undefined at \(x=0\)). I follow the Kaggle shared bike competition in adding 1 as opposed to some other value. Since adding one is so common, R includes a built in function `log1p()` for calculating this logarithm.
-
-Using the RMSLE for evaluating model performance is a natural choice if the model is trained using the log-values of the dependent variable. From the equations above, we see that calculating the RMSLE amounts to skipping the step of transforming the predicted outcomes \(\hat{y}_{i}\) back to the same units as the original actual outcomes before calculating the RMSE. This makes sense since the model is trained to best-fit the outcomes \(y_{i}\) and not `cnt`.
+When using a count variable, it is common to perform a log-transformation. It is common also to add a number to the outcome variable before converting it to logarithms, since this prevents the transformation from being undefined for zero-valued outcomes (since \(\log(x)\) is undefined at \(x=0\)). I follow the Kaggle shared bike competition in adding 1 as opposed to some other value.^[See the evaluation page for the Kaggle competition (https://www.kaggle.com/c/bike-sharing-demand/overview/evaluation), last accessed 23 April 2020.] Since adding one is so common, R includes a built-in function `log1p()` for calculating this logarithm.
 
 
 ## Feature Preparation
 
-Before running any models, I make some changes to the features provided in the original dataset:
+Before training any models, I make some changes to the features provided in the original dataset:
 
-1. An important variable in the original dataset is the `timestamp`. From it, I extract the year, the month, the day of the week, and the hour of the day. Since I have created these new features, I do not use the `timestamp` variable in my analysis. I treat all time-date related features as *categorical factors* in my analysis.^[See Chapter 4 of  *Introduction to Machine Learning with Python*, Andreas C. Müller and Sarah Guido, O'Reilly, for a detailed discussion of feature engineering (https://www.oreilly.com/library/view/introduction-to-machine/9781449369880/ch04.html), last accessed 17 April 2020.] As a result, each level of a factor is treated as a separate 0/1 dummy variable. Since `season` is a linear combination of three months, for simplicity I do not use `season` in my modelling. I also do not use the day of the month in my modelling.
+1. An important variable in the original dataset is the `timestamp`. From it, I extract the year, the month, the day of the week, and the hour of the day. Since I have created these new features, I do not use the `timestamp` variable in my analysis. I treat all time-date related features as *categorical factors* in my analysis.^[See Chapter 4 of  *Introduction to Machine Learning with Python*, Andreas C. Müller and Sarah Guido, O'Reilly, for a detailed discussion of feature engineering (https://www.oreilly.com/library/view/introduction-to-machine/9781449369880/ch04.html), last accessed 23 April 2020.] As a result, each level of a factor is treated as a separate 0/1 dummy variable. Since each `season` is a linear combination of three month dummies, I do not use `season` in my modelling. I also do not use the day of the month in my modelling.
 
 2. Rather than treating `is_weekend`, `is_holiday` and the day of the week as separate features, I create a new 8-levelled factor variable from these three, which follows the 8 levels I use in the exploratory analysis above. If a given day of the week falls on a holiday, I recode the day of the week as "Holiday"; otherwise, I keep the day of the week (e.g. "Monday") as given. I call this new factor variable `wday_holiday` in my code, since it extends my `wday` feature for the day of the week.
 
-3. The `weather_code` in the data takes on 7 different values, as Figure 8 shows. However, since some levels are more prevalent than others, to ease combining weather with other features to form new cross-effect terms, I create a new `weather` factor taking on three levels: "Clear", "Cloudy", and "Rain".
+3. The `weather_code` in the data takes on 7 different values, as Figure 8 shows. However, since some levels are more prevalent than others, to ease combining weather with other features to form new interaction terms, I create a new `weather` factor taking on three levels: "Clear", "Cloudy", and "Rain".^["Clear" corresponds to `weather_code` 1; "Cloudy" corresponds to codes 2, 3, and 4; and "Rain" corresponds to codes 7, 10, and 26.]
 
-4. Finally, I create a new `is_high_temp` feature which reports whether the "feels-like" temperature of a given observation is "High" or "Low" compared to the average for that hour-month pair. This dummy variable is used to incorporate the findings relating to higher or lower than average temperature seen in Figure 6. 
+4. Finally, I create a new `is_high_temp` feature which reports whether the "feels-like" temperature of a given observation is "High" or "Low" compared to the average for that hour-month pair. This dummy variable is used to incorporate the findings relating to higher or lower than average temperature seen in Figure 6.^[I have not investigated other ways of encoding temperature as a categorical variable. One way to improve the analysis might be to try alternative encodings.]
 
 Next, I describe the preprocessing steps I take before running machine learning models.
 
@@ -238,9 +230,9 @@ Next, I describe the preprocessing steps I take before running machine learning 
 
 ### Pre-Calculating Group Averages
 
-Ideally the machine learning models I train would include features composed by combining different features, such as combinations of day of the week with the week and the month of the year. Doing this a lot, however, dramatically slows down the processing time required to train the algorithms.
+Ideally the machine learning models I train would include features composed by combining different features, such as combinations of day of the week with the hour and the month of the year. Doing this a lot, however, dramatically slows down the processing time required to train the algorithms.
 
-For this reason, I create new features which include the averages for the number of new bike journeys for different groups of features. More specifically, since I treat the `cnt` variable as a Poisson variable, I take the mean of \(\log(1 + count)\) for each group according to certain groupings. This approach is similar to the averageing approach adopted in the Movielens project, which also involves calculating group means to avoid having to estimate a regression directly with many thousands of different features. See the HarvardX *Data Science Professional Certificate* [Course Text](https://rafalab.github.io/dsbook/large-datasets.html#recommendation-systems) for more details on this.^[See *Data Analysis and Prediction Algorithms with R*, Rafael A. Irizarry, (https://rafalab.github.io/dsbook/large-datasets.html#recommendation-systems), last updated 1 April 2020; last accessed 17 April 2020.]
+For this reason, I create new features which include the averages for the number of new bike journeys for different groups of features. More specifically, since I treat the `cnt` variable as a Poisson variable, I take the mean of \(\log(1 + count)\) for each group according to certain groupings. This approach is similar to the averageing approach adopted in the Movielens project, which also involves calculating group means to avoid having to estimate a regression directly with many thousands of different features. See the HarvardX *Data Science Professional Certificate* [Course Text](https://rafalab.github.io/dsbook/large-datasets.html#recommendation-systems) for more details on this.^[See *Data Analysis and Prediction Algorithms with R*, Rafael A. Irizarry, (https://rafalab.github.io/dsbook/large-datasets.html#recommendation-systems), last updated 1 April 2020; last accessed 23 April 2020.]
 
 After some exploration of the feasibility of different group combinations, I pre-calculate average log-counts for groups grouped by:
 
@@ -253,12 +245,12 @@ After some exploration of the feasibility of different group combinations, I pre
 
 All these groupings other than the second acknowledge the likely importance of hour as a predictor. They also focus on those other predictors which, based on the exploratory analysis above, I would expect to have more predictive power. When training the model, I calculate these group averages on a subset of the `training` dataset, and then test different algorithms on the remaining portion of the `training` dataset. This permits these group averages to mimic coefficients estimated on the subset of the `training` set.
 
-Much more work could be done to refine these groupings, and to test out which combinations are worth including instead of or in addition to those listed here. This paper does not attempt to trial different combinations, and I leave this for future work. Instead, it simply includes all these features in all modelling approaches described next.
+Much more work could be done to refine these groupings, and to test out which combinations are worth including instead of or in addition to those listed here. This paper does not attempt to trial different combinations, and I leave this for future work. Instead, it simply includes all features in all modelling approaches described next.
 
 
 ### Centering and Scaling Features
 
-The penalized regression models described in the [Modelling Approach] section below require that the features matrix be fully centred and scaled before the model fitting algorithm will work. A final step I take before training any algorithms is therefore to centre and scale all features, including the group averages described above, by subtracting the mean from each observation for each feature and by dividing by the standard deviation. In order to efficiently do this, I use the `preProcess()` function from the caret package described in the [course text](https://rafalab.github.io/dsbook/caret.html).
+The penalized regression models described in the [Modelling Approach] section below require that the features matrix be standardized before the model fitting algorithm will work. A final step I take before training any algorithms is therefore to centre and scale all features, including the group averages described above, by subtracting the mean from each observation for each feature and by dividing by the standard deviation. In order to efficiently do this, I use the `preProcess()` function from the caret package described in the [course text](https://rafalab.github.io/dsbook/caret.html).
 
 
 ## Modelling Approach
@@ -282,43 +274,45 @@ As a baseline, I perform ordinary least squared regression (OLS). The fitted mod
 
 In this equation, \(\hat{b}_{0}\) is the estimated intercept term which will equal the mean value of \(\hat{y}_{i}\) in the dataset, since the other features are all centered. \(\hat{b}_{g}\) represents the set of 6 group average features described in the [Pre-Calculating Group Averages] section. The next term \(\hat{b}_{t}\) represents a series of time-date related fixed effects for each hour, each calendar month, each day of the week (`wkday_holiday`), and each year. The final term \(b_{w}\) represents weather-related variables, where those which are categorical variables such as `weather_code` and `is_high_temp` take on a series of fixed effects. In total, the model includes 60 features, excluding the implicit fixed-effect levels.
 
-Note that the outcome variable is \(\hat{y}_{i} = \log(\hat{c}_{i} + 1)\), where \(\hat{c}_{i}\) is the new bike journey `cnt` variable. This setup, transforming the count variable via what is known as a *link* function, means that the model falls into the category of generalized linear models (GLM), where a function of the original dependent variable is a linear function of the features. Although I model using OLS, an alternative method would use the Poisson version of GLM directly.
+Note that the outcome variable is \(\hat{y}_{i} = \log(\hat{c}_{i} + 1)\), where \(\hat{c}_{i}\) is the new bike journey `cnt` variable. This setup, transforming the count variable, is similar to generalized linear models (GLM), where a function of the mean of the dependent variable's distribution may be expressed as a linear function of the features.
+
+Although I model using OLS, a potentially better method would use the Poisson version of GLM. In this model, \(\log(\mu)\) is a linear function of the features, where \(\mu\) is the mean of the `cnt` variable's conditional distribution. Poisson regression has the benefit that it can deal with zero-valued outcomes directly, without adding a 1 to the dependent variable, thereby reducing model bias. As a result could potentially increase prediction accuracy, although in this paper I measure model accuracy after already adding 1 to the dependent variable, so it is not clear that that applies here. I save Poisson regression for future work. 
 
 I estimate the OLS regression coefficients using the `internal_train` dataset and calculate an out-of-sample RMSE on the `internal_test` dataset. I use this RMSE to compare the predictive ability of OLS against other models described model.
 
 
 ### Regularization: Ridge Regression
 
-The next model trained is ridge regression. Ridge regression is another name for the type of regularization followed in the movie recommendation system in the [course text](https://rafalab.github.io/dsbook/large-datasets.html#recommendation-systems).
+The next model I train is ridge regression. Ridge regression is another name for the type of regularization followed in the movie recommendation system in the [course text](https://rafalab.github.io/dsbook/large-datasets.html#recommendation-systems).
 
 In ridge regression, we seek the set of coefficients \(\hat{b}_{p}\) for parameters \(p\) which minimizes the following cost function:
 
 \[\sum_{i}(y_{i} - b_{0} - b_{g} - b_{t} - b_{w})^2 + \lambda(\sum_{g}b_{g}^2 + \sum_{t}b_{t}^2 + \sum_{w}b_{w}^2),\]
 
-where the terms have the same meaning as in the previous subsection. This expression represents the usual mean squared error loss function, but with a second term of \(\lambda\) multiplied by the square of the coefficient on each feature. This second term *increases* the overall loss: the larger the \(\lambda\), the greater the penalization and more coefficients are shrunk towards zero. Note that the intercept is not penalized, in order to ensure we have a unique solution.^[See Ryan Tibshirani's Data Mining Lecture Slides, Lecture 16, p. 7 (https://www.stat.cmu.edu/~ryantibs/datamining/lectures/16-modr1.pdf), last accessed 16 April 2020.] As a result, as in the case of OLS regression, the intercept will equal the mean of \(\hat{y}\) in the dataset used for estimation.
+where the terms have the same meaning as in the previous subsection. This expression represents the usual mean squared error loss function, but with a second term of \(\lambda\) multiplied by the square of the coefficient on each feature. For a given set of \(\hat{b}_{p}\), the second term *increases* the overall loss compared to the least squares loss function. In order to minimize the cost function for a given \(\lambda\), the coefficients are shrunk towards zero. Note that the intercept is not penalized, in order to ensure we have a unique solution.^[See Ryan Tibshirani's Data Mining Lecture Slides, Lecture 16, p. 7 (https://www.stat.cmu.edu/~ryantibs/datamining/lectures/16-modr1.pdf), last accessed 23 April 2020.] As a result, as in the case of OLS regression, the intercept will equal the mean of \(\hat{y}\) in the dataset used for estimation.
 
-A trained model's prediction error can be decomposed into the variance of the true model and mean squared error (MSE). The MSE itself can be decomposed into a product of the model's bias (squared) and its variance. This is known as the **bias-variance trade-off**.^[See Ryan Tibshirani's Data Mining Lecture Slides, Lecture 14 (https://www.stat.cmu.edu/~ryantibs/datamining/lectures/14-reg2.pdf), last accessed 16 April 2020. See also Datacamp, Tutorial *Regularization: Ridge, Lasso and Elastic Net*, (https://www.datacamp.com/community/tutorials/tutorial-ridge-lasso-elastic-net), last accessed 16 April 2020.]
+A model's test MSE prediction error can be decomposed as the sum of the irreducible error, which is the variance of the true model's error, the model's (squared) bias, and its variance. This is known as the **bias-variance trade-off**, since fitting a model with lower variance will tend to mean higher bias and vice versa.^[See G. James et al. *An Introduction to Statistical Learning with Applications in R*, Chapters 2 and 6, Corrected 7th printing (http://faculty.marshall.usc.edu/gareth-james/ISL/ISLR%20Seventh%20Printing.pdf), last accessed 23 April 2020. See also Ryan Tibshirani's Data Mining Lecture Slides, Lecture 14 (https://www.stat.cmu.edu/~ryantibs/datamining/lectures/14-reg2.pdf), last accessed 23 April 2020.]
 
-The advantage of OLS is that it results in unbiased coefficient estimates - coefficient estimates which, in expectation, equal the true model parameters. This reduces the MSE. However, OLS also leads to larger variance  in the fitted model, meaning that the estimated coefficients are likely to vary a lot from dataset to dataset, and increasing the MSE. This can occur if features are highly correlated with one another or if the model contains a large number of features.
+The advantage of OLS is that, assuming the true model is linear, it results in unbiased coefficient estimates, reducing the MSE. However, OLS also leads to larger variance than would a more constrained, less flexible model, meaning that the estimated coefficients are free to vary more when trained on one dataset or another.
 
-The idea of ridge regression is to reduce the model variance at the expense of introducing some bias, and in doing so reduce the MSE and therefore the prediction error. For the right values of \(\lambda\), it should improve the ability of a model trained on one dataset to predict outcomes on another dataset.
+The idea of ridge regression is to reduce the model variance at the expense of introducing some bias, and in doing so reduce the test MSE. For certain values of \(\lambda\), it can improve the ability of a model trained on one dataset to predict outcomes on another dataset.
 
-To perform ridge regression, I use the glmnet R package. Throughout, I set the `alpha` parameter to zero to select ridge regression as opposed to lasso regression which I describe below. To select the \(\lambda\) penalty term, I try 100 different \(\lambda\) values in the range between \(10^{-10}\) and \(10^{10}\). For each value of \(\lambda\), I use 10-fold cross-validation on the `internal_train` dataset to obtain an estimated MSE averaged across the 10 test folds. I then choose the \(\lambda\) one standard error away from the \(\lambda\) which minimises the MSE. This \(\lambda\) is larger than the \(\lambda\) that minimises the MSE, and therefore results in more penalization, reducing the variance of the model.
+To perform ridge regression, I use the glmnet R package.^[This is described in the Lab of Chapter 6 of G. James et al. *An Introduction to Statistical Learning with Applications in R*, Corrected 7th printing (http://faculty.marshall.usc.edu/gareth-james/ISL/ISLR%20Seventh%20Printing.pdf), last accessed 23 April 2020. See also the Glmnet Vignette (https://web.stanford.edu/~hastie/Papers/Glmnet_Vignette.pdf), last accessed 23 April 2020.] Throughout, I set the `alpha` parameter to zero to select ridge regression as opposed to lasso regression which I describe below. To select the \(\lambda\) penalty term, I try 100 different \(\lambda\) values in the range between \(10^{-10}\) and \(10^{10}\). For each value of \(\lambda\), I use 10-fold cross-validation on the `internal_train` dataset to obtain an estimated MSE averaged across the 10 test folds. I then choose the \(\lambda\) one standard error away from the \(\lambda\) which minimises the MSE. This \(\lambda\) is larger than the \(\lambda\) that minimises the MSE, and therefore results in more penalization, further reducing the variance of the model (though raising the bias).
 
-In order to compare the performance of ridge regression against OLS regression and other types of model, I fit the regularized model with the optimal choice of \(lambda\) to the full `internal_train` dataset. I then compute an RMSE (in terms of the outcome variable \(y\) or RMSLE in terms of the `cnt` variable) by applying the trained model to the `internal_test` dataset.
+In order to compare the performance of ridge regression against OLS regression and other types of model, I fit the regularized model with the optimal choice of \(\lambda\) to the full `internal_train` dataset. I then compute an RMSE (in terms of the outcome variable \(y\) or RMSLE in terms of the `cnt` variable) by using the trained model to predict outcomes on the `internal_test` dataset.
 
 
-### Regularization: Lasso Regression
+### Regularization: The Lasso
 
-The final model I train is lasso regression. Lasso regression is similar to ridge regression, in that it is also a way of penalizing coefficients towards zero. Its difference from ridge regression is that lasso also leads to some features' being excluded entirely from the regression. In other words, lasso's solution to the bias-variance trade-off is to reduce the coefficients on some features to zero, reducing the number of features. This reduces the complexity of the model, aiding model interpretation, and also lowers the variance.
+The final model I train is the lasso. The lasso is similar to ridge regression, in that it is also a way of penalizing coefficients towards zero. Its difference from ridge regression is that for some values of \(\lambda\) the lasso also leads to the coefficients on some features' being reduced all the way to zero. In other words, it performs feature selection, excluding some features entirely from the model. This reduces the complexity of the model, aiding model interpretation, while also lowering model variance.
 
-In lasso regression, we seek the set of coefficients \(\hat{b}_{p}\) for parameters \(p\) which minimizes the following cost function:
+In the lasso, we seek the set of coefficients \(\hat{b}_{p}\) for parameters \(p\) which minimizes the following cost function:
 
 \[\sum_{i}(y_{i} - b_{0} - b_{g} - b_{t} - b_{w})^2 + \lambda(\sum_{g}\mid b_{g}\mid + \sum_{t}\mid b_{t}\mid + \sum_{w}\mid b_{w}\mid),\]
 
-The only difference between the lasso and ridge regression cost functions is that instead of penalizing using *squared* coefficient terms - as in ridge - the lasso approach instead uses the *absolute* values of coefficients in the penalty term.
+The only difference between the lasso and ridge cost functions is that instead of penalizing using *squared* coefficient terms - as in ridge - the lasso instead uses the *absolute* values of coefficients in the penalty term.
 
-As for ridge, I use the glmnet package to estimate lasso. I select lasso by setting the `alpha` parameter to 1. I also use the same 100 \(\lambda\) values in the range between \(10^{-10}\) and \(10^{10}\). As before, for each \(\lambda\), I use 10-fold cross-validation on the `internal_train` dataset to obtain an MSE, and select the \(lambda\) one standard error away from the \(lambda\) that minimises the MSE. This \(\lambda\) results in more penalization, and therefore more features will be removed than at the \(\lambda\) that minimises the MSE.
+As for ridge, I use the glmnet package to estimate the lasso. I select the lasso by setting the `alpha` parameter to 1. I also use the same 100 \(\lambda\) values in the range between \(10^{-10}\) and \(10^{10}\). As before, for each \(\lambda\), I use 10-fold cross-validation on the `internal_train` dataset to obtain an MSE, and select the \(\lambda\) one standard error away from the \(\lambda\) that minimises the MSE. This \(\lambda\) results in more penalization, and therefore more features will be removed than at the \(\lambda\) that minimises the MSE.
 
 To compare the models, again I fit the model again using the final choice of \(\lambda\) to the full `internal_train` dataset and calculate the RMSE on the `internal_test` set.
 
@@ -327,14 +321,14 @@ To compare the models, again I fit the model again using the final choice of \(\
 
 ## Baseline Results
 
-Figure 9 shows the size of the coefficients on each feature in the OLS regression, excluding the intercept. From this, we see that the features with the largest intercepts are those we would expect: the pre-calculated group averages. The `cnt_month_wkday_holiday` has very little predictive power, as might be expected because it excludes the hour variable. The feature with the largest coefficient is the group averages for hour, month, and day of the week. This was anticipated by Figure 5. 
+Figure 9 shows the size of the coefficients on each feature in the OLS regression, excluding the intercept. From this, we see that the features with the largest intercepts are those we would expect: the pre-calculated group averages. The `cnt_month_wkday_holiday` feature has a very small coefficient, as might be expected, since it excludes the hour variable. The feature with the largest coefficient is the group averages for hour, month, and day of the week. This was anticipated by Figure 5. 
 
-Other than the group features, the hours remain those features with the most predictive power. The days of the week have very little to add, once the group averages with the hour and month are already included. The estimated intercept is `r format(as.matrix(results_lm$fit$coefficients)[1,], digits = 3)`, which equals the mean of \(\hat{y}_{i}\) and is substantially larger than the nearest coefficient.
+Other than the group features, the hours of the day remain those features with the most predictive power. The day of the week has very little to add, once the group averages with the hour and month are already included. The estimated intercept is `r format(as.matrix(results_lm$fit$coefficients)[1,], digits = 3)`, which equals the mean of \(\hat{y}_{i}\) and is substantially larger than the nearest coefficient.
 
 Using the fitted model to predict the outcome in the `internal_test` dataset, I obtain an RMSLE of `r format(results_lm$rmsle_out, digit = 4)`.
 
 
-```{r fig9, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "OLS Coefficient Estimates"}
+```{r fig9, fig.height = 4.5, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "OLS Coefficient Estimates"}
 tibble(Feature = rownames(as.matrix(results_lm$fit$coefficients)),
        Estimate = results_lm$fit$coefficients) %>%
   slice(2:length(Feature)) %>%
@@ -347,27 +341,27 @@ tibble(Feature = rownames(as.matrix(results_lm$fit$coefficients)),
 
 ## Ridge Regression
 
-Figure 10 illustrates how the average MSE from 10-fold cross-validation varies for different value of \(\lambda\) in ridge regression. We see that the MSE is minimised when \(\log(\lambda)\) is less than zero, or \(\lambda\) is less than one. My preferred \(\lambda\) parameter is \(\lambda\) = `r results_L2$cv$lambda.1se`, only slightly above zero. Re-estimating the model on the full `internal_train` dataset, using this choice of \(\lambda\), I obtain an RMSLE of `r format(results_L2$rmsle_out, digit = 4)`.
+Figure 10 illustrates how the average MSE from 10-fold cross-validation varies for different value of \(\lambda\) for ridge regression. We see that the MSE is minimised when \(\log(\lambda)\) is less than zero, or \(\lambda\) is less than one. The preferred \(\lambda\) parameter is \(\lambda\) = `r results_L2$cv$lambda.1se`, only slightly above zero. Re-estimating the model on the full `internal_train` dataset and using this choice of \(\lambda\), I obtain an RMSLE of `r format(results_L2$rmsle_out, digit = 4)` on the `internal_test` set.
 
-```{r fig10, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Ridge Regression Cross-Validation MSEs for Different Choices of Lambda"}
+```{r fig10, fig.height = 4.5, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Ridge Regression Cross-Validation MSEs for Different Choices of Lambda"}
 plot(results_L2$cv)
 ```
 
 
 ## Lasso Regression
 
-Likewise, Figure 11 illustrates the average MSE for lasso from 10-fold cross-validation for different value of \(\lambda\). Again we see that the MSE is minimised when \(\log(\lambda)\) is less than zero, or \(\lambda\) is less than one. Across the top of the figure we can also see the number of features the model includes, decreasing rightwards across the figure. The \(\lambda\) I choose to use is \(\lambda\) = `r format(results_L1$cv$lambda.1se, digit = 4)`, again close to zero.
+Likewise, Figure 11 illustrates the average MSE for the lasso from 10-fold cross-validation for different value of \(\lambda\). Again we see that the MSE is minimised when \(\log(\lambda)\) is less than zero, or \(\lambda\) is less than one. Across the top of the figure we can also see the number of features the model includes, decreasing rightwards across the figure. The \(\lambda\) I choose to use is \(\lambda\) = `r format(results_L1$cv$lambda.1se, digit = 4)`, again close to zero.
 
-```{r fig11, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Lasso Regression Cross-Validation MSEs for Different Choices of Lambda"}
+```{r fig11, fig.height = 4.5, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Lasso Regression Cross-Validation MSEs for Different Choices of Lambda"}
 plot(results_L1$cv)
 ```
 
-Re-estimating the model on the full `internal_train` dataset, using my choice of \(\lambda\), I obtain an RMSLE of `r format(results_L1$rmsle_out, digit = 4)`. Figure 12 illustrates the coefficient estimates in the final lasso model. We see that lasso leaves `r tibble(Estimate = as.matrix(results_L1$fit$beta)) %>% filter(Estimate != 0) %>% count() %>% pull()` of the original 60 features in the model.
+Re-estimating the model on the full `internal_train` dataset, using my choice of \(\lambda\), I obtain an RMSLE of `r format(results_L1$rmsle_out, digit = 4)` on the `internal_test` set. Figure 12 illustrates the coefficient estimates in the final lasso model. We see that the lasso model leaves `r tibble(Estimate = as.matrix(results_L1$fit$beta[, which(results_L1$fit$lambda == results_L1$cv$lambda.1se)])) %>% filter(Estimate != 0) %>% count() %>% pull()` of the original 60 features in the model.
 
 
-```{r fig12, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Lasso Coefficient Estimates"}
+```{r fig12, fig.height = 4.5, fig.width = 7.333333, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Lasso Coefficient Estimates"}
 tibble(Feature = rownames(results_L1$fit$beta),
-       Estimate = as.matrix(results_L1$fit$beta)) %>%
+       Estimate = as.matrix(results_L1$fit$beta[, which(results_L1$fit$lambda == results_L1$cv$lambda.1se)])) %>%
   filter(Estimate != 0) %>%
   mutate(Feature = reorder(Feature, Estimate, FUN = "identity")) %>%
   ggplot(aes(Feature, Estimate)) + geom_bar(stat = "identity") +
@@ -378,9 +372,9 @@ tibble(Feature = rownames(results_L1$fit$beta),
 
 ## Fitting a Final Model
 
-Table \ref{tab:tab3} summarises the results for each model fitted to the full `internal_train` subset of the `training` dataset. Since the ridge model has the lowest RMSLE, I select it as my final model.
+Table \ref{tab:tab3} summarises the results for each model fitted to the full `internal_train` subset of the `training` dataset. Since the ridge regression model has the lowest RMSLE, I select it as my final model. I note however that the benefit of applying regularization to the OLS model appears to be very limited, and in fact the OLS model may perform as well or even better than the ridge regression model when predicting outcomes on an unseen dataset. The reason for this is likely due to the fact that most of the predictive power resides in a couple of the features in the model.
 
-Before testing on the `validation` set, I fit the ridge regression to the full `training` dataset, using the optimal \(\lambda\) parameter obtained for that model of \(\lambda\) = `r results_L2$cv$lambda.1se`. Once fitted to the `training` dataset, I obtain a final RMSLE value of `r format(rmse_validation, digit = 4)` on the `validation` set.
+Before testing on the `validation` set, to maximise the precision of the coefficient estimates, I fit the ridge regression to the full `training` dataset, using the optimal \(\lambda\) parameter obtained for that model of \(\lambda\) = `r results_L2$cv$lambda.1se`. Once fitted to the `training` dataset, I obtain a final RMSLE value of `r format(rmse_validation, digit = 4)` on the `validation` set.
 
 ```{r tab3, echo = FALSE, message = FALSE, warning = FALSE}
 tibble(
@@ -392,7 +386,7 @@ tibble(
   mutate(OLS = format(OLS, digits = 4),
          Ridge = format(Ridge, digits = 4),
          Lasso = format(Lasso, digits = 4)) %>%
-  knitr::kable("latex", booktabs = T, caption = "RMSLE Results on the Training Set") %>% kable_styling(position = "center", latex_options = c("striped", "hold_position"))
+  knitr::kable("latex", booktabs = T, caption = "RMSLE Results on the Training Set") %>% kable_styling(position = "center", latex_options = c("hold_position"))
 ```
 
 
@@ -400,13 +394,37 @@ tibble(
 
 In this project, I use data science and machine learning techniques learned on the HarvardX [*Data Science Professional Certificate*](https://www.edx.org/professional-certificate/harvardx-data-science) programme on [edX](https://www.edx.org/) to predict the demand for shared bikes in London. This paper forms my final project for the capstone course.
 
-More specifically, I construct an algorithm to predict the number of new bike journeys in a given hour using hourly data on shared bikes in London from `r format(summary_stats_full$start_date, "%d %B %Y")` to `r format(summary_stats_full$last_date, "%d %B %Y")`. The data comes from Kaggle, the online data science community, which also offers a competition to [forecast shared bike demand]( https://www.kaggle.com/c/bike-sharing-demand) on a scheme in Washington DC.^[See the competition's page for further details (https://www.kaggle.com/c/bike-sharing-demand), last accessed 17 April 2020.]
+More specifically, I construct an algorithm to predict the number of new bike journeys in a given hour using hourly data on shared bikes in London from `r format(summary_stats_full$start_date, "%d %B %Y")` to `r format(summary_stats_full$last_date, "%d %B %Y")`. The data comes from Kaggle, the online data science community, which also offers a competition to [forecast shared bike demand]( https://www.kaggle.com/c/bike-sharing-demand) on a scheme in Washington DC.^[See the competition's page for further details (https://www.kaggle.com/c/bike-sharing-demand), last accessed 23 April 2020.]
 
-The demand for shared bikes is measured as a frequency or count variable, which tallies the number of new trips started each hour. This means it cannot take on negative values, and unlike the Gaussian distribution is skewed with a long tail towards higher count values. As a result, it is natural to log-transform the count variable and use the Root Mean Squared Logarithmic Error or RMSLE to evaluate the predictive performance of different algorithms.
+The demand for shared bikes is measured as a frequency or count variable, which tallies the number of new trips started each hour. This means it cannot take on negative values, and unlike the Gaussian distribution is skewed with a long tail towards higher count values. As a result, it is common to log-transform the count variable and use the Root Mean Squared Logarithmic Error or RMSLE to evaluate the predictive performance of different algorithms.
 
-In this paper, I compare a number of machine learning models for predicting bike demand. First, I train a standard linear model to predict the log-transformed count outcome. Second, I train two penalized linear models - Ridge and Lasso - to see whether I can improve the prediction. I find that, comparing these algorithms on my `training` data, the ridge regression is the best performing. I therefore use it to predict shared bike usage on my `validation` dataset. Overall, I obtain a final RMSLE of `r format(rmse_validation, digit = 4)` on the `validation` set.
+In this paper, I compare a number of machine learning models for predicting bike demand. First, I train a standard linear model to predict the log-transformed count outcome. Second, I train two penalized linear models - ridge regression and the lasso - to see whether I can improve the prediction. I find that, comparing these algorithms on my `training` data, the ridge regression is the best performing. I therefore use it to predict shared bike usage on my `validation` dataset. I note however that the benefit of using ridge regression over using an OLS model appears to be limited. Overall, I obtain a final RMSLE of `r format(rmse_validation, digit = 4)` on the `validation` set.
 
-There are a number of ways this analysis could be built upon. First, I carry out very limited feature selection. Changing or adding to the group averages included in the models is an obvious next step. Additionally, some features are much more important than others. One idea would be to use different \(\lambda\) for different parameters. For instance, we might not want to regularize the coefficients on the group average features at all, but only those on the other features. This is something that the glmnet package permits.^[See the Glmnet Vignette, p. 14 for further details. (https://web.stanford.edu/~hastie/Papers/Glmnet_Vignette.pdf), last accessed 16 April 2020.]
+There are a number of ways this analysis could be built upon. First, I carry out very limited cleaning of the data and feature selection. According to the plots reported by `R` for the OLS model (not shown in this paper), a number of observations are outliers and/or have high leverage. These points would be worth investigating. Additionally, changing or adding to the group averages included in the models is an obvious way of refining the model, since interacting different features is one potential route to improving prediction. We see that the RMSLE on the `validation` set is substantially higher than those obtained on the `internal_test` subset of the training set, so it would be worth considering what causes the difference and whether it is down to overfitting.
 
-Finally, the improvement of the ridge and lasso models over the standard OLS regression appear relatively limited here. We also see that the RMSLE on the `validation` set is substantially higher than those obtained on the `internal_test` subset of the training set. It would be worth exploring what causes this RMSLE to be so much higher, and perhaps exploring alternative families of models - such as Random Forests or ARIMA models - to improve on this.
+We also see that some features are much more important than others. One idea would be to use different \(\lambda\) for different parameters. For instance, we might not want to regularize the coefficients on the group average features at all, but only those on the other features. This is something that the glmnet package permits.^[See the Glmnet Vignette, p. 14 for further details. (https://web.stanford.edu/~hastie/Papers/Glmnet_Vignette.pdf), last accessed 23 April 2020.]
 
+Finally, as noted the improvement of the ridge and lasso models over the standard OLS regression appear relatively limited here. It may be that improving the modelling results can be better achieved not by *restricting* the OLS model, which is what ridge regression and the lasso do, but rather by training a *less constrained*, non-linear model, such as a random forests model.
+
+
+# References
+
+All links last accessed on 23 April 2020.
+
+- Hastie, T. and J. Qian, *Glmnet Vignette* (https://web.stanford.edu/~hastie/Papers/Glmnet_Vignette.pdf). 
+
+- Irizarry, R. A., *Data Analysis and Prediction Algorithms with R*, (https://rafalab.github.io/dsbook/), last updated 1 April 2020.
+
+- James G., D. Witten, T. Hastie, and R. Tibshirani, *An Introduction to Statistical Learning with Applications in R*, Corrected 7th printing (http://faculty.marshall.usc.edu/gareth-james/ISL/ISLR%20Seventh%20Printing.pdf).
+
+- Kaggle, Capital Bikeshare Bike Sharing Demand Competition (https://www.kaggle.com/c/bike-sharing-demand).
+
+- Kaggle, London Bike Share Data Set (https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset).
+
+- Müller, A. C. and S. Guido, *Introduction to Machine Learning with Python*, O'Reilly (https://www.oreilly.com/library/view/introduction-to-machine/9781449369880/ch04.html).
+
+- Tibshirani, R., Data Mining Lecture Slides (https://www.stat.cmu.edu/~ryantibs/datamining/lectures/).
+
+- Transport for London, Cycling Data (https://tfl.gov.uk/modes/cycling/santander-cycles).
+
+- Transport for London, Santander Cycles Docking Station Information (https://tfl.gov.uk/modes/cycling/santander-cycles/find-a-docking-station?intcmp=2321).
